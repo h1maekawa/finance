@@ -1,12 +1,15 @@
 import { reactive } from 'vue'
-import type { Session, User } from '@supabase/supabase-js'
+
+type AppUser = {
+  id: string
+  email: string | null
+  displayName: string | null
+}
 
 export const sessionStore = reactive<{
-  session: Session | null
-  user: User | null
+  user: AppUser | null
   initialized: boolean
 }>({
-  session: null,
   user: null,
   initialized: false,
 })
