@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { sessionStore } from '@/stores/session'
 import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
@@ -15,6 +14,7 @@ const {
   deleteTransaction,
 } = useTransactions(() => currentHouseholdId.value)
 const { categories } = useCategories(() => currentHouseholdId.value)
+const devUserId = import.meta.env.VITE_DEV_USER_ID as string | undefined
 
 const form = ref({
   id: '',
@@ -61,7 +61,7 @@ function resetForm() {
 }
 
 async function submit() {
-  const userId = sessionStore.user?.id
+  const userId = devUserId
   if (!userId) return
 
   const payload = {

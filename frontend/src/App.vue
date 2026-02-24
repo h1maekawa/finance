@@ -1,35 +1,27 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import AppHeader from '@/components/layouts/AppHeader.vue'
-import { useAuth } from '@/composables/useAuth'
+import BottomNavigation from '@/components/layouts/BottomNavigation.vue'
 import { useHousehold } from '@/composables/useHousehold'
 
-const { sessionStore, initAuth } = useAuth()
 const { fetchHouseholds } = useHousehold()
 
-const loggedIn = computed(() => !!sessionStore.user)
-
 onMounted(async () => {
-  await initAuth()
-  if (sessionStore.user) {
+  try {
     await fetchHouseholds()
+  } catch (error) {
+    console.warn('Failed to fetch households. Set VITE_DEV_HOUSEHOLD_ID for local-only mode.', error)
   }
 })
-
-watch(
-  () => sessionStore.user?.id,
-  async (userId) => {
-    if (userId) {
-      await fetchHouseholds()
-    }
-  },
-)
 </script>
 
 <template>
-  <div class="container">
-    <AppHeader v-if="loggedIn" />
-    <RouterView />
+  <div class="mobile-shell">
+    <AppHeader />
+    <main class="mobile-main">
+      <RouterView />
+    </main>
+    <BottomNavigation />
   </div>
 </template>

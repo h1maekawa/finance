@@ -1,25 +1,22 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
-import { useAuth } from '@/composables/useAuth'
-import { useHousehold } from '@/composables/useHousehold'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import MobileHeader from '@/components/layouts/MobileHeader.vue'
 
-const { signOut } = useAuth()
-const { households, currentHouseholdId, setCurrentHousehold } = useHousehold()
+const route = useRoute()
+
+const title = computed(() => {
+  if (route.path === '/') return '資金形成ダッシュボード'
+  if (route.path === '/income') return '収入管理'
+  if (route.path === '/expense') return '支出管理'
+  if (route.path === '/transactions') return '取引履歴'
+  if (route.path === '/assets') return '現預貯金'
+  if (route.path === '/settings') return '設定'
+  if (route.path === '/categories') return 'カテゴリ管理'
+  return '資金形成アプリ'
+})
 </script>
 
 <template>
-  <header class="card" style="margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
-    <div class="row" style="align-items: center;">
-      <strong>家計簿</strong>
-      <RouterLink to="/">ダッシュボード</RouterLink>
-      <RouterLink to="/transactions">取引</RouterLink>
-      <RouterLink to="/categories">カテゴリ</RouterLink>
-    </div>
-    <div class="row" style="align-items: center;">
-      <select :value="currentHouseholdId ?? ''" @change="setCurrentHousehold(($event.target as HTMLSelectElement).value)">
-        <option v-for="h in households" :key="h.id" :value="h.id">{{ h.name }}</option>
-      </select>
-      <button @click="signOut">ログアウト</button>
-    </div>
-  </header>
+  <MobileHeader :title="title" />
 </template>
