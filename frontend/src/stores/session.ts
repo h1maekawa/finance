@@ -1,13 +1,13 @@
 import { reactive } from 'vue'
 
-type AppUser = {
+/** Firebase 認証のみ使用時のユーザー情報（Supabase 型に合わせた最小形状） */
+export interface AuthUser {
   id: string
-  email: string | null
-  displayName: string | null
+  email?: string | null
 }
 
 export const sessionStore = reactive<{
-  user: AppUser | null
+  user: AuthUser | null
   initialized: boolean
 }>({
   user: null,

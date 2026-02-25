@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
+import { useHousehold } from '@/composables/useHousehold'
 
-const { state, totalAssets, update } = useAssetBreakdown()
+const { currentHouseholdId } = useHousehold()
+const { state, totalAssets, update } = useAssetBreakdown(() => currentHouseholdId.value)
 
 const rows = computed(() => [
   { key: 'stocks', label: '個別株' },
@@ -13,7 +15,7 @@ const rows = computed(() => [
 
 function onInput(key: 'stocks' | 'funds' | 'cash' | 'account', value: string) {
   const parsed = Number(value)
-  update({ [key]: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0 })
+  void update({ [key]: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0 })
 }
 </script>
 

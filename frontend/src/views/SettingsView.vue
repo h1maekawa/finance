@@ -1,22 +1,41 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 import { useSavingsGoal } from '@/composables/useSavingsGoal'
+import { useHousehold } from '@/composables/useHousehold'
 
-const { totalAssets } = useAssetBreakdown()
-const goal = useSavingsGoal(() => totalAssets.value)
+const { currentHouseholdId } = useHousehold()
+const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
+const goal = useSavingsGoal(() => currentHouseholdId.value, () => totalAssets.value)
 
-const targetAmountInput = ref(goal.targetAmount.value)
-const targetYearInput = ref(goal.targetYear.value)
+const targetAmountInput = ref(0)
+const targetYearInput = ref(2030)
 const savedMessage = ref('')
+const errorMessage = ref('')
 
-function saveGoal() {
-  goal.setTarget(Number(targetAmountInput.value) || 0)
-  goal.setTargetYear(Number(targetYearInput.value) || new Date().getFullYear())
-  savedMessage.value = '保存しました'
-  setTimeout(() => {
-    savedMessage.value = ''
-  }, 1500)
+watch(
+  [goal.targetAmount, goal.targetYear],
+  () => {
+    targetAmountInput.value = goal.targetAmount.value
+    targetYearInput.value = goal.targetYear.value
+  },
+  { immediate: true },
+)
+
+async function saveGoal() {
+  errorMessage.value = ''
+  savedMessage.value = ''
+
+  try {
+    await goal.setTarget(Number(targetAmountInput.value) || 0)
+    await goal.setTargetYear(Number(targetYearInput.value) || new Date().getFullYear())
+    savedMessage.value = '保存しました'
+    setTimeout(() => {
+      savedMessage.value = ''
+    }, 1500)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '保存に失敗しました'
+  }
 }
 </script>
 
@@ -39,6 +58,7 @@ function saveGoal() {
 
         <button style="max-width: 200px;" @click="saveGoal">保存</button>
         <p v-if="savedMessage" style="margin: 0; color: #2563eb;">{{ savedMessage }}</p>
+        <p v-if="errorMessage" style="margin: 0; color: #dc2626;">{{ errorMessage }}</p>
       </div>
     </section>
 

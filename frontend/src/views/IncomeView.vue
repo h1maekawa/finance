@@ -8,7 +8,7 @@ import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 const { currentHouseholdId } = useHousehold()
 const { categories } = useCategories(() => currentHouseholdId.value)
 const { transactions, selectedMonth, totalIncome } = useTransactions(() => currentHouseholdId.value)
-const { totalAssets } = useAssetBreakdown()
+const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),

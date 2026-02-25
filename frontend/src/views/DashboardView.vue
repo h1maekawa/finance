@@ -13,10 +13,10 @@ const {
   totalExpense,
 } = useTransactions(() => currentHouseholdId.value)
 const { fetchBudgets } = useBudgets(() => currentHouseholdId.value)
-const { totalAssets } = useAssetBreakdown()
+const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
 const currentAssetsValue = () => totalAssets.value
 
-const goal = useSavingsGoal(currentAssetsValue)
+const goal = useSavingsGoal(() => currentHouseholdId.value, currentAssetsValue)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
