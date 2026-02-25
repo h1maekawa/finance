@@ -1,5 +1,5 @@
 import { onMounted, ref } from 'vue'
-import { signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
 import { firebaseAuth, googleProvider } from '@/lib/firebase'
 import { sessionStore } from '@/stores/session'
 import type { AuthUser } from '@/stores/session'
@@ -20,7 +20,7 @@ export function useAuth() {
     subscribed = true
     return new Promise((resolve) => {
       let resolved = false
-      firebaseAuth.onAuthStateChange((user) => {
+      onAuthStateChanged(firebaseAuth, (user) => {
         sessionStore.user = user
           ? mapFirebaseUserToAuthUser(user.uid, user.email ?? undefined)
           : null

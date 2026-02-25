@@ -9,4 +9,16 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/analytics'],
+          supabase: ['@supabase/supabase-js'],
+          charts: ['chart.js', 'vue-chartjs'],
+          vue: ['vue', 'vue-router'],
+        },
+      },
+    },
+  },
 })
