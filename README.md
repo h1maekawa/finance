@@ -17,16 +17,23 @@
 
 ## セットアップ
 
-### 1. Supabase
-1. Supabase プロジェクトを作成
-2. SQL Editor で `supabase/migrations/20260215230000_init_household_budget_app.sql` を実行
-3. Auth の Email/Password を有効化
+### 1. Firebase（ログイン）
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成
+2. Authentication → Sign-in method で「Google」を有効化
+3. プロジェクト設定で Web アプリを追加し、`VITE_FIREBASE_*` を取得
 
-### 2. Frontend
+### 2. Supabase（データ）
+1. Supabase プロジェクトを作成
+2. SQL Editor で `supabase/migrations/` 内の SQL を順に実行
+3. **Authentication → Third-party auth** で Firebase を追加（Project ID を入力）。  
+   [Firebase Auth 連携](https://supabase.com/docs/guides/auth/third-party/firebase-auth) 参照
+4. （推奨）Firebase のカスタムクレームに `role: 'authenticated'` を付与（Supabase の RLS で authenticated 扱いにするため）
+
+### 3. Frontend
 ```bash
 cd frontend
 cp .env.example .env
-# .env の URL / ANON KEY を設定
+# .env に VITE_SUPABASE_* と VITE_FIREBASE_* を設定
 npm install
 npm run dev
 ```
