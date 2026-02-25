@@ -84,6 +84,55 @@ npm run dev
 - household membership に基づくアクセス制御
 - Firebase ID トークンを Supabase リクエストヘッダーに付与
 
+## Vercel デプロイ
+
+### 1. Vercel プロジェクト作成
+
+1. [Vercel](https://vercel.com/) で GitHub リポジトリをインポート
+2. **Root Directory** を `frontend` に設定
+3. Framework Preset が **Vite** になっていることを確認
+4. Build / Output はデフォルトのままで OK
+
+```
+Root Directory : frontend
+Build Command  : npm run build   (自動検出)
+Output Dir     : dist            (自動検出)
+```
+
+### 2. 環境変数を Vercel に登録
+
+Vercel の **Settings → Environment Variables** に `.env` と同じキー・値を登録する。
+
+| 変数名 | 値 |
+|--------|-----|
+| `VITE_SUPABASE_URL` | Supabase の Project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase の anon key |
+| `VITE_FIREBASE_API_KEY` | Firebase の API キー |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `finance-site-fada6.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | `finance-site-fada6` |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `finance-site-fada6.firebasestorage.app` |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `858089882597` |
+| `VITE_FIREBASE_APP_ID` | Firebase の App ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | `G-YME6HPE7CT` |
+
+### 3. Firebase に Vercel ドメインを追加
+
+Firebase Console → Authentication → Settings → **Authorized domains** に以下を追加。
+
+```
+your-project.vercel.app       ← Vercel が発行するドメイン
+your-custom-domain.com        ← カスタムドメインを使う場合
+```
+
+> ※ デプロイ後に Vercel ダッシュボードで発行されたドメインを確認してから追加する。
+
+### 4. SPA ルーティング
+
+`frontend/vercel.json` に全パスを `index.html` へリライトする設定済みなので、
+`/transactions` 等を直接開いても 404 にならない。
+
+---
+
 ## 今後の拡張
 
 - household 招待フロー（メール招待テーブル追加）
