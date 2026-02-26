@@ -27,6 +27,18 @@ IF NOT EXISTS (
   WHERE typname = 'budget_period'
 ) THEN CREATE TYPE public.budget_period AS ENUM ('monthly');
 END IF;
+IF NOT EXISTS (
+  SELECT 1
+  FROM pg_type
+  WHERE typname = 'notification_provider'
+) THEN CREATE TYPE public.notification_provider AS ENUM ('line');
+END IF;
+IF NOT EXISTS (
+  SELECT 1
+  FROM pg_type
+  WHERE typname = 'notification_status'
+) THEN CREATE TYPE public.notification_status AS ENUM ('sent', 'failed');
+END IF;
 END $$;
 -- ------------------------------------------------------------
 -- Tables
@@ -140,10 +152,55 @@ create table if not exists public.investment_assets (
   asset_type text not null default '投資信託',
   name text not null,
   amount bigint not null default 0,
+  ticker text,
+  quantity numeric(20, 6) not null default 0,
+  avg_cost numeric(20, 6),
+  take_profit_price numeric(20, 6),
+  notify_take_profit boolean not null default false,
+  last_notified_at timestamptz,
   sort_order int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint investment_assets_amount_non_negative check (amount >= 0)
+  constraint investment_assets_amount_non_negative check (amount >= 0),
+  constraint investment_assets_quantity_non_negative check (quantity >= 0)
+);
+create table if not exists public.stocks (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  symbol text not null,
+  account_type text not null default '特定口座',
+  shares numeric(20, 6) not null default 0,
+  average_price numeric(20, 6) not null default 0,
+  current_price numeric(20, 6) not null default 0,
+  evaluation_amount numeric(20, 6) not null default 0,
+  profit_loss numeric(20, 6) not null default 0,
+  profit_loss_rate numeric(10, 4) not null default 0,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  constraint stocks_shares_non_negative check (shares >= 0),
+  constraint stocks_average_price_non_negative check (average_price >= 0)
+);
+create table if not exists public.user_notification_channels (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  provider public.notification_provider not null default 'line',
+  line_user_id text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, provider)
+);
+create table if not exists public.notification_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  household_id uuid references public.households(id) on delete set null,
+  investment_asset_id uuid references public.investment_assets(id) on delete set null,
+  provider public.notification_provider not null default 'line',
+  status public.notification_status not null,
+  message text not null,
+  payload jsonb,
+  error_message text,
+  created_at timestamptz not null default now()
 );
 -- ------------------------------------------------------------
 -- UUID → text 型変換（既存テーブルに対する冪等マイグレーション）
@@ -210,6 +267,23 @@ ALTER TABLE public.transactions
 ALTER COLUMN user_id TYPE text USING user_id::text;
 END IF;
 END $$;
+-- investment_assets 追加カラム（既存DB向け）
+alter table public.investment_assets add column if not exists ticker text;
+alter table public.investment_assets add column if not exists quantity numeric(20, 6) not null default 0;
+alter table public.investment_assets add column if not exists avg_cost numeric(20, 6);
+alter table public.investment_assets add column if not exists take_profit_price numeric(20, 6);
+alter table public.investment_assets add column if not exists notify_take_profit boolean not null default false;
+alter table public.investment_assets add column if not exists last_notified_at timestamptz;
+do $$ begin
+if not exists (
+  select 1
+  from pg_constraint
+  where conname = 'investment_assets_quantity_non_negative'
+) then
+  alter table public.investment_assets
+    add constraint investment_assets_quantity_non_negative check (quantity >= 0);
+end if;
+end $$;
 -- ------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------
@@ -223,6 +297,11 @@ create index if not exists idx_household_settings_household_id on public.househo
 create index if not exists idx_household_assets_household_id on public.household_assets (household_id);
 create index if not exists idx_bank_accounts_household_id on public.bank_accounts (household_id, sort_order);
 create index if not exists idx_investment_assets_household_id on public.investment_assets (household_id, sort_order);
+create index if not exists idx_investment_assets_household_ticker on public.investment_assets (household_id, ticker);
+create index if not exists idx_investment_assets_notify_tp on public.investment_assets (household_id, notify_take_profit);
+create index if not exists idx_stocks_user_symbol on public.stocks (user_id, symbol);
+create index if not exists idx_user_notification_channels_user on public.user_notification_channels (user_id, provider, is_active);
+create index if not exists idx_notification_logs_user_created on public.notification_logs (user_id, created_at desc);
 -- ------------------------------------------------------------
 -- Functions
 -- ------------------------------------------------------------
@@ -389,6 +468,16 @@ create trigger trg_investment_assets_timestamps before
 insert
   or
 update on public.investment_assets for each row execute function public.set_timestamps();
+drop trigger if exists trg_stocks_timestamps on public.stocks;
+create trigger trg_stocks_timestamps before
+insert
+  or
+update on public.stocks for each row execute function public.set_timestamps();
+drop trigger if exists trg_user_notification_channels_timestamps on public.user_notification_channels;
+create trigger trg_user_notification_channels_timestamps before
+insert
+  or
+update on public.user_notification_channels for each row execute function public.set_timestamps();
 -- ------------------------------------------------------------
 -- Row Level Security
 -- ------------------------------------------------------------
@@ -402,6 +491,9 @@ alter table public.household_settings enable row level security;
 alter table public.household_assets enable row level security;
 alter table public.bank_accounts enable row level security;
 alter table public.investment_assets enable row level security;
+alter table public.stocks enable row level security;
+alter table public.user_notification_channels enable row level security;
+alter table public.notification_logs enable row level security;
 -- profiles
 drop policy if exists profiles_select_own on public.profiles;
 create policy profiles_select_own on public.profiles for
@@ -467,3 +559,33 @@ create policy bank_accounts_all_member on public.bank_accounts for all using (pu
 -- investment_assets
 drop policy if exists investment_assets_all_member on public.investment_assets;
 create policy investment_assets_all_member on public.investment_assets for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));
+-- stocks
+drop policy if exists stocks_select_own on public.stocks;
+create policy stocks_select_own on public.stocks for
+select using (user_id = (auth.jwt()->>'sub'));
+drop policy if exists stocks_insert_own on public.stocks;
+create policy stocks_insert_own on public.stocks for
+insert with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists stocks_update_own on public.stocks;
+create policy stocks_update_own on public.stocks for
+update using (user_id = (auth.jwt()->>'sub')) with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists stocks_delete_own on public.stocks;
+create policy stocks_delete_own on public.stocks for
+delete using (user_id = (auth.jwt()->>'sub'));
+-- user_notification_channels
+drop policy if exists user_notification_channels_select_own on public.user_notification_channels;
+create policy user_notification_channels_select_own on public.user_notification_channels for
+select using (user_id = (auth.jwt()->>'sub'));
+drop policy if exists user_notification_channels_insert_own on public.user_notification_channels;
+create policy user_notification_channels_insert_own on public.user_notification_channels for
+insert with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists user_notification_channels_update_own on public.user_notification_channels;
+create policy user_notification_channels_update_own on public.user_notification_channels for
+update using (user_id = (auth.jwt()->>'sub')) with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists user_notification_channels_delete_own on public.user_notification_channels;
+create policy user_notification_channels_delete_own on public.user_notification_channels for
+delete using (user_id = (auth.jwt()->>'sub'));
+-- notification_logs
+drop policy if exists notification_logs_select_own on public.notification_logs;
+create policy notification_logs_select_own on public.notification_logs for
+select using (user_id = (auth.jwt()->>'sub'));

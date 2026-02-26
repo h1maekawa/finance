@@ -7,8 +7,9 @@ const route = useRoute()
 
 const tabs = [
   { path: '/', label: 'ホーム', icon: '🏠' },
+  { path: '/goal', label: '目標', icon: '🎯' },
   { path: '/accounts', label: '口座', icon: '🏦' },
-  { path: '/investments', label: '資産', icon: '📊' },
+  { path: '/investments', label: '個別株', icon: '📊' },
   { path: '/income', label: '収入', icon: '📈' },
   { path: '/expense', label: '支出', icon: '🧾' },
   { path: '/transactions', label: '取引', icon: '💳' },

@@ -48,5 +48,33 @@ export type InvestmentAsset = {
   asset_type: string
   name: string
   amount: number
+  ticker: string | null
+  quantity: number
+  avg_cost: number | null
+  take_profit_price: number | null
+  notify_take_profit: boolean
+  last_notified_at: string | null
   sort_order: number
+}
+
+export type UserNotificationChannel = {
+  id: string
+  user_id: string
+  provider: 'line'
+  line_user_id: string
+  is_active: boolean
+}
+
+export type Stock = {
+  id: string
+  user_id: string
+  symbol: string
+  account_type: string
+  shares: number
+  average_price: number
+  current_price: number
+  evaluation_amount: number
+  profit_loss: number
+  profit_loss_rate: number
+  updated_at: string
 }

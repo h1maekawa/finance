@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 import { useSavingsGoal } from '@/composables/useSavingsGoal'
 import { useHousehold } from '@/composables/useHousehold'
+import { useNotificationChannels } from '@/composables/useNotificationChannels'
 
 const { currentHouseholdId } = useHousehold()
 const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
@@ -12,6 +13,16 @@ const targetAmountInput = ref(0)
 const targetYearInput = ref(2030)
 const savedMessage = ref('')
 const errorMessage = ref('')
+const lineUserIdInput = ref('')
+const lineEnabledInput = ref(true)
+const savedLineMessage = ref('')
+const errorLineMessage = ref('')
+
+const {
+  lineChannel,
+  fetchLineChannel,
+  saveLineChannel,
+} = useNotificationChannels()
 
 watch(
   [goal.targetAmount, goal.targetYear],
@@ -37,6 +48,36 @@ async function saveGoal() {
     errorMessage.value = error instanceof Error ? error.message : '保存に失敗しました'
   }
 }
+
+async function saveLineSettings() {
+  errorLineMessage.value = ''
+  savedLineMessage.value = ''
+
+  if (!lineUserIdInput.value.trim()) {
+    errorLineMessage.value = 'LINE User IDを入力してください'
+    return
+  }
+
+  try {
+    await saveLineChannel(lineUserIdInput.value, lineEnabledInput.value)
+    savedLineMessage.value = 'LINE通知設定を保存しました'
+    setTimeout(() => {
+      savedLineMessage.value = ''
+    }, 1500)
+  } catch (error) {
+    errorLineMessage.value = error instanceof Error ? error.message : 'LINE通知設定の保存に失敗しました'
+  }
+}
+
+onMounted(async () => {
+  try {
+    await fetchLineChannel()
+    lineUserIdInput.value = lineChannel.value?.line_user_id ?? ''
+    lineEnabledInput.value = lineChannel.value?.is_active ?? true
+  } catch {
+    // no-op
+  }
+})
 </script>
 
 <template>
@@ -67,6 +108,25 @@ async function saveGoal() {
       <p style="margin: 0.2rem 0;">目標金額: {{ goal.targetAmount.value.toLocaleString() }} 円</p>
       <p style="margin: 0.2rem 0;">目標年: {{ goal.targetYear.value }} 年</p>
       <p style="margin: 0.2rem 0;">残り必要額: {{ goal.remainingNeeded.value.toLocaleString() }} 円</p>
+    </section>
+
+    <section class="card">
+      <h2>LINE通知設定</h2>
+      <p style="margin-top: 0; color: #6b7280;">利確タイミングをLINEに通知します（ブラウザ未起動でも通知）。</p>
+
+      <div class="row" style="flex-direction: column;">
+        <label style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <span style="font-weight: 600;">LINE User ID</span>
+          <input v-model="lineUserIdInput" type="text" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 0.5rem;">
+          <input v-model="lineEnabledInput" type="checkbox" />
+          <span>LINE通知を有効化</span>
+        </label>
+        <button style="max-width: 240px;" @click="saveLineSettings">LINE通知設定を保存</button>
+        <p v-if="savedLineMessage" style="margin: 0; color: #2563eb;">{{ savedLineMessage }}</p>
+        <p v-if="errorLineMessage" style="margin: 0; color: #dc2626;">{{ errorLineMessage }}</p>
+      </div>
     </section>
   </main>
 </template>

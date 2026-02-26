@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { Doughnut } from 'vue-chartjs'
 import { ArcElement, Chart as ChartJS, Legend, Tooltip } from 'chart.js'
 import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
-import { useBudgets } from '@/composables/useBudgets'
-import { useSavingsGoal } from '@/composables/useSavingsGoal'
 import { useAccounts } from '@/composables/useAccounts'
 import { useInvestments } from '@/composables/useInvestments'
 
@@ -17,16 +15,10 @@ const {
   totalIncome,
   totalExpense,
 } = useTransactions(() => currentHouseholdId.value)
-const { fetchBudgets } = useBudgets(() => currentHouseholdId.value)
 const { accounts, totalBalance } = useAccounts(() => currentHouseholdId.value)
-const { investments, totalInvestments } = useInvestments(() => currentHouseholdId.value)
+const { investments, totalInvestments, getCurrentAmount } = useInvestments(() => currentHouseholdId.value)
 
 const grandTotal = computed(() => totalBalance.value + totalInvestments.value)
-
-const goal = useSavingsGoal(
-  () => currentHouseholdId.value,
-  () => grandTotal.value,
-)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
@@ -34,10 +26,6 @@ const monthInput = computed({
     selectedMonth.value = new Date(`${value}-01T00:00:00`)
   },
 })
-
-const monthStart = computed(() => `${monthInput.value}-01`)
-
-const monthlySavingsNeededFromGoal = computed(() => goal.monthlySavingsNeeded.value)
 
 const daysLeftInMonth = computed(() => {
   const now = new Date()
@@ -47,7 +35,7 @@ const daysLeftInMonth = computed(() => {
 })
 
 const todaySpendable = computed(() => {
-  const allowance = totalIncome.value - totalExpense.value - monthlySavingsNeededFromGoal.value
+  const allowance = totalIncome.value - totalExpense.value
   if (allowance <= 0) return 0
   return Math.floor(allowance / daysLeftInMonth.value)
 })
@@ -56,9 +44,6 @@ const todaySpendableMessage = computed(() =>
   todaySpendable.value > 0 ? '余裕があります！' : '貯金目標のため今日は節制を',
 )
 
-const dreamMessage = computed(() =>
-  `🏡 古民家カフェ×バーの夢まで、あと${goal.monthsRemaining.value}ヶ月！毎月コツコツ貯めて目標を達成しましょう💪`,
-)
 
 // --- Pie chart data ---
 const chartColors = [
@@ -81,9 +66,10 @@ const chartData = computed(() => {
     }
   }
   for (const inv of investments.value) {
-    if (inv.amount > 0) {
+    const currentAmount = getCurrentAmount(inv)
+    if (currentAmount > 0) {
       labels.push(`${inv.name}`)
-      data.push(inv.amount)
+      data.push(currentAmount)
       bgColors.push(chartColors[colorIdx % chartColors.length])
       colorIdx++
     }
@@ -130,13 +116,6 @@ const chartOptions = {
   },
 }
 
-watch(
-  monthStart,
-  (start) => {
-    void fetchBudgets(start)
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
@@ -159,53 +138,10 @@ watch(
       </div>
     </section>
 
-    <!-- 目標達成率 -->
-    <section class="dashboard__section">
-      <h2 class="dashboard__heading">目標達成率</h2>
-      <p class="dashboard__rate">{{ goal.achievementRate.value.toFixed(1) }}%</p>
-      <div class="progress-bar">
-        <div
-          class="progress-bar__fill"
-          :style="{ width: `${Math.min(100, goal.achievementRate.value)}%` }"
-        />
-      </div>
-      <p class="dashboard__progress-caption">
-        {{ grandTotal.toLocaleString() }}円 / {{ goal.targetAmount.value.toLocaleString() }}円
-      </p>
-    </section>
-
     <section class="dashboard__section dashboard__section--highlight">
       <h2 class="dashboard__heading">今日使っていい金額</h2>
       <p class="dashboard__today-amount">{{ todaySpendable.toLocaleString() }}円</p>
       <p class="dashboard__today-message">{{ todaySpendableMessage }}</p>
-    </section>
-
-    <section class="dashboard__grid">
-      <article class="dashboard__card">
-        <h3 class="dashboard__card-label">現在資産</h3>
-        <p class="dashboard__card-value">{{ grandTotal.toLocaleString() }}円</p>
-      </article>
-      <article class="dashboard__card">
-        <h3 class="dashboard__card-label">目標金額</h3>
-        <p class="dashboard__card-value">{{ goal.targetAmount.value.toLocaleString() }}円</p>
-      </article>
-      <article class="dashboard__card">
-        <h3 class="dashboard__card-label">残り必要額</h3>
-        <p class="dashboard__card-value">{{ goal.remainingNeeded.value.toLocaleString() }}円</p>
-      </article>
-      <article class="dashboard__card">
-        <h3 class="dashboard__card-label">開業予定年</h3>
-        <p class="dashboard__card-value">{{ goal.targetYear.value }}年</p>
-      </article>
-    </section>
-
-    <section class="dashboard__section dashboard__section--monthly">
-      <h2 class="dashboard__heading">月次計画</h2>
-      <div class="dashboard__monthly-row">
-        <span>残り月数{{ goal.monthsRemaining.value }}ヶ月</span>
-        <span>今月必要な貯金額{{ monthlySavingsNeededFromGoal.toLocaleString() }}円</span>
-      </div>
-      <p class="dashboard__dream-message">{{ dreamMessage }}</p>
     </section>
 
     <section class="dashboard__section dashboard__section--month-picker">
@@ -274,11 +210,6 @@ watch(
   color: #fff;
 }
 
-.dashboard__section--monthly {
-  background: #f0fdfa;
-  border: 1px solid #99f6e4;
-}
-
 .dashboard__section--month-picker {
   display: flex;
   align-items: center;
@@ -301,33 +232,6 @@ watch(
   height: 280px;
 }
 
-.dashboard__rate {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dashboard__progress-caption {
-  margin: 0.5rem 0 0 0;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.progress-bar {
-  height: 12px;
-  background: #e5e7eb;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progress-bar__fill {
-  height: 100%;
-  background: linear-gradient(90deg, #0d9488, #14b8a6);
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-
 .dashboard__today-amount {
   margin: 0;
   font-size: 2rem;
@@ -338,49 +242,6 @@ watch(
   margin: 0.25rem 0 0 0;
   font-size: 1rem;
   opacity: 0.95;
-}
-
-.dashboard__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.dashboard__card {
-  background: var(--card-bg);
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem;
-}
-
-.dashboard__card-label {
-  margin: 0 0 0.25rem 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.dashboard__card-value {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dashboard__monthly-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.dashboard__dream-message {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
 }
 
 .dashboard__month-label {
