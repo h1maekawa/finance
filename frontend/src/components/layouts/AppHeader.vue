@@ -12,7 +12,7 @@ const title = computed(() => {
   if (route.path === '/investments') return '個別株管理'
   if (route.path === '/income') return '収入管理'
   if (route.path === '/expense') return '支出管理'
-  if (route.path === '/transactions') return '取引履歴'
+  if (route.path === '/register') return '登録'
   if (route.path === '/assets') return '現預貯金'
   if (route.path === '/settings') return '設定'
   if (route.path === '/categories') return 'カテゴリ管理'

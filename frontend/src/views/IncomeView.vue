@@ -7,7 +7,7 @@ import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 
 const { currentHouseholdId } = useHousehold()
 const { categories } = useCategories(() => currentHouseholdId.value)
-const { transactions, selectedMonth, totalIncome } = useTransactions(() => currentHouseholdId.value)
+const { transactions, selectedMonth, totalIncome, totalExpense } = useTransactions(() => currentHouseholdId.value)
 const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
 
 const monthInput = computed({
@@ -48,6 +48,10 @@ const recommendedCapitalGainCategories = ['個別株キャピタルゲイン', '
       <article class="card" style="flex: 1; min-width: 220px;">
         <h3>今月の収入合計</h3>
         <p>{{ totalIncome.toLocaleString() }} 円</p>
+      </article>
+      <article class="card" style="flex: 1; min-width: 220px;">
+        <h3>今月の支出合計</h3>
+        <p>{{ totalExpense.toLocaleString() }} 円</p>
       </article>
     </section>
 

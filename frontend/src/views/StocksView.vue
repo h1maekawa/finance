@@ -19,6 +19,7 @@ const symbolInput = ref('')
 const accountTypeInput = ref('特定口座')
 const sharesInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
+const showAddModal = ref(false)
 
 const tableRows = computed(() =>
   stocks.value.map((stock) => ({
@@ -34,6 +35,16 @@ const tableRows = computed(() =>
     profitLossRate: Number(stock.profit_loss_rate ?? 0),
   })),
 )
+
+const totalProfitLoss = computed(() =>
+  tableRows.value.reduce((sum, row) => sum + row.profitLoss, 0),
+)
+
+const totalProfitLossRate = computed(() => {
+  const costTotal = tableRows.value.reduce((sum, row) => sum + (row.averagePrice * row.shares), 0)
+  if (costTotal <= 0) return 0
+  return (totalProfitLoss.value / costTotal) * 100
+})
 
 function formatNumber(value: number, fractionDigits = 2) {
   return value.toLocaleString(undefined, {
@@ -67,6 +78,7 @@ async function handleAddStock() {
     accountTypeInput.value = '特定口座'
     sharesInput.value = undefined
     averagePriceInput.value = undefined
+    showAddModal.value = false
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '銘柄の追加に失敗しました。'
   }
@@ -100,6 +112,8 @@ onMounted(() => {
     <section class="stocks-view__summary card">
       <h2 class="stocks-view__title">個別株ポートフォリオ</h2>
       <p class="stocks-view__summary-value">評価額合計: {{ formatNumber(totalEvaluationAmount, 0) }} 円</p>
+      <p class="stocks-view__summary-sub">評価損益合計: <span :class="profitClass(totalProfitLoss)">{{ formatNumber(totalProfitLoss, 0) }} 円</span></p>
+      <p class="stocks-view__summary-sub">評価損益率合計: <span :class="profitClass(totalProfitLossRate)">{{ formatNumber(totalProfitLossRate, 2) }}%</span></p>
       <button class="stocks-view__update-btn" :disabled="updatingPrices" @click="handleUpdatePrices">
         {{ updatingPrices ? '更新中...' : '価格更新' }}
       </button>
@@ -109,16 +123,26 @@ onMounted(() => {
       <p v-if="formError" class="stocks-view__error">{{ formError }}</p>
     </section>
 
-    <section class="card">
-      <h3 style="margin-top: 0;">銘柄追加</h3>
-      <form class="stocks-view__form" @submit.prevent="handleAddStock">
-        <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: AAPL）" required />
-        <input v-model="accountTypeInput" type="text" placeholder="口座区分（例: 特定口座）" required />
-        <input v-model.number="sharesInput" type="number" step="0.0001" min="0" placeholder="保有数量" required />
-        <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
-        <button type="submit">追加</button>
-      </form>
+    <section class="card stocks-view__register">
+      <h3 style="margin: 0;">株式登録</h3>
+      <button type="button" @click="showAddModal = true">登録</button>
     </section>
+
+    <div v-if="showAddModal" class="stocks-view__modal-overlay" @click.self="showAddModal = false">
+      <section class="stocks-view__modal card">
+        <h3 style="margin-top: 0;">銘柄追加</h3>
+        <form class="stocks-view__form" @submit.prevent="handleAddStock">
+          <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: AAPL）" required />
+          <input v-model="accountTypeInput" type="text" placeholder="口座区分（例: 特定口座）" required />
+          <input v-model.number="sharesInput" type="number" step="0.0001" min="0" placeholder="保有数量" required />
+          <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="submit">登録する</button>
+            <button type="button" @click="showAddModal = false">閉じる</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
     <section class="card stocks-view__table-wrap">
       <h3 style="margin-top: 0;">保有一覧</h3>
@@ -183,6 +207,11 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.stocks-view__summary-sub {
+  margin: 0.2rem 0;
+  font-size: 0.95rem;
+}
+
 .stocks-view__update-btn {
   background: #ffffff;
   color: #0f766e;
@@ -202,6 +231,27 @@ onMounted(() => {
 .stocks-view__form {
   display: grid;
   gap: 0.5rem;
+}
+
+.stocks-view__register {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stocks-view__modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.stocks-view__modal {
+  width: min(520px, 100%);
 }
 
 .stocks-view__table-wrap {

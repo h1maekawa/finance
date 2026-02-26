@@ -8,7 +8,7 @@ import { useMonthlySummary } from '@/composables/useMonthlySummary'
 
 const { currentHouseholdId } = useHousehold()
 const { categories } = useCategories(() => currentHouseholdId.value)
-const { transactions, selectedMonth, totalExpense } = useTransactions(() => currentHouseholdId.value)
+const { transactions, selectedMonth, totalIncome, totalExpense } = useTransactions(() => currentHouseholdId.value)
 
 const summary = useMonthlySummary(
   () => transactions.value,
@@ -46,6 +46,14 @@ const expenseByCategory = computed(() => {
       <article class="card" style="flex: 1; min-width: 220px;">
         <h3>今月の支出合計</h3>
         <p>{{ totalExpense.toLocaleString() }} 円</p>
+      </article>
+      <article class="card" style="flex: 1; min-width: 220px;">
+        <h3>今月の収入合計</h3>
+        <p>{{ totalIncome.toLocaleString() }} 円</p>
+      </article>
+      <article class="card" style="flex: 1; min-width: 220px;">
+        <h3>今月の収支</h3>
+        <p>{{ (totalIncome - totalExpense).toLocaleString() }} 円</p>
       </article>
     </section>
 

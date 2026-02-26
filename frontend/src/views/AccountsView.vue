@@ -4,23 +4,13 @@ import { useAccounts } from '@/composables/useAccounts'
 import { useHousehold } from '@/composables/useHousehold'
 
 const { currentHouseholdId } = useHousehold()
-const { accounts, totalBalance, loading, addAccount, updateAccount, deleteAccount } = useAccounts(
+const { accounts, totalBalance, loading, updateAccount, deleteAccount } = useAccounts(
   () => currentHouseholdId.value,
 )
-
-const newName = ref('')
-const newBalance = ref<number | undefined>(undefined)
 
 const editingId = ref<string | null>(null)
 const editName = ref('')
 const editBalance = ref<number>(0)
-
-async function handleAdd() {
-  if (!newName.value.trim()) return
-  await addAccount(newName.value, newBalance.value ?? 0)
-  newName.value = ''
-  newBalance.value = undefined
-}
 
 function startEdit(account: { id: string; institution_name: string; balance: number }) {
   editingId.value = account.id
@@ -45,38 +35,13 @@ async function handleDelete(id: string) {
 
 <template>
   <main class="accounts-view">
-    <!-- 合計残高 -->
     <section class="accounts-view__total card">
-      <h2 class="accounts-view__total-label">口座合計</h2>
+      <h2 class="accounts-view__total-label">全体口座合計</h2>
       <p class="accounts-view__total-value">{{ totalBalance.toLocaleString() }} 円</p>
     </section>
 
-    <!-- 新規追加 -->
-    <section class="accounts-view__add card">
-      <h2 class="accounts-view__section-title">口座を追加</h2>
-      <form class="accounts-view__form" @submit.prevent="handleAdd">
-        <input
-          v-model="newName"
-          type="text"
-          placeholder="金融機関名（例：三菱UFJ銀行）"
-          class="accounts-view__input"
-          required
-        />
-        <input
-          v-model.number="newBalance"
-          type="number"
-          min="0"
-          step="1"
-          placeholder="残高（円）"
-          class="accounts-view__input"
-        />
-        <button type="submit" class="accounts-view__btn accounts-view__btn--add">追加</button>
-      </form>
-    </section>
-
-    <!-- 口座一覧 -->
     <section class="accounts-view__list card">
-      <h2 class="accounts-view__section-title">登録口座一覧</h2>
+      <h2 class="accounts-view__section-title">各口座の残高</h2>
       <p v-if="loading" class="accounts-view__loading">読み込み中…</p>
       <p v-else-if="accounts.length === 0" class="accounts-view__empty">まだ口座が登録されていません</p>
 
@@ -145,12 +110,6 @@ async function handleDelete(id: string) {
   font-weight: 700;
 }
 
-.accounts-view__form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
 .accounts-view__input {
   width: 100%;
 }
@@ -167,11 +126,6 @@ async function handleDelete(id: string) {
   font-size: 0.9rem;
   border: none;
   cursor: pointer;
-}
-
-.accounts-view__btn--add {
-  background: #2563eb;
-  color: #fff;
 }
 
 .accounts-view__btn--save {

@@ -24,35 +24,58 @@ const dreamMessage = computed(
 </script>
 
 <template>
-  <main class="row" style="flex-direction: column;">
+  <main class="goal-view">
     <section class="card">
-      <h1 style="margin: 0;">目標</h1>
-    </section>
+      <h2 class="goal-view__label">現在資産</h2>
+      <p class="goal-view__value">{{ grandTotal.toLocaleString() }}円</p>
 
-    <section class="row">
-      <article class="card" style="flex: 1; min-width: 220px;">
-        <h3>現在資産</h3>
-        <p>{{ grandTotal.toLocaleString() }}円</p>
-      </article>
-      <article class="card" style="flex: 1; min-width: 220px;">
-        <h3>目標金額</h3>
-        <p>{{ goal.targetAmount.value.toLocaleString() }}円</p>
-      </article>
-      <article class="card" style="flex: 1; min-width: 220px;">
-        <h3>残り必要額</h3>
-        <p>{{ goal.remainingNeeded.value.toLocaleString() }}円</p>
-      </article>
-      <article class="card" style="flex: 1; min-width: 220px;">
-        <h3>開業予定年</h3>
-        <p>{{ goal.targetYear.value }}年</p>
-      </article>
-    </section>
+      <h2 class="goal-view__label">目標金額</h2>
+      <p class="goal-view__value">{{ goal.targetAmount.value.toLocaleString() }}円</p>
 
-    <section class="card">
-      <h2>月次計画</h2>
-      <p>残り月数{{ goal.monthsRemaining.value }}ヶ月</p>
-      <p>今月必要な貯金額{{ monthlySavingsNeeded.toLocaleString() }}円</p>
-      <p style="margin-bottom: 0; color: #334155;">{{ dreamMessage }}</p>
+      <h2 class="goal-view__label">残り必要額</h2>
+      <p class="goal-view__value">{{ goal.remainingNeeded.value.toLocaleString() }}円</p>
+
+      <h2 class="goal-view__label">開業予定年</h2>
+      <p class="goal-view__value">{{ goal.targetYear.value }}年</p>
+
+      <h2 class="goal-view__label">月次計画</h2>
+      <p class="goal-view__line">残り月数{{ goal.monthsRemaining.value }}ヶ月</p>
+      <p class="goal-view__line">今月必要な貯金額{{ monthlySavingsNeeded.toLocaleString() }}円</p>
+      <p class="goal-view__message">{{ dreamMessage }}</p>
     </section>
   </main>
 </template>
+
+<style scoped>
+.goal-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 2rem;
+}
+
+.goal-view__label {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.goal-view__value {
+  margin: 0 0 1rem;
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.goal-view__line {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.goal-view__message {
+  margin: 0.4rem 0 0;
+  color: #334155;
+}
+</style>
