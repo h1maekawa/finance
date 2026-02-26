@@ -33,3 +33,20 @@ export type Transaction = {
   transaction_date: string
   note: string | null
 }
+
+export type BankAccount = {
+  id: string
+  household_id: string
+  institution_name: string
+  balance: number
+  sort_order: number
+}
+
+export type InvestmentAsset = {
+  id: string
+  household_id: string
+  asset_type: string
+  name: string
+  amount: number
+  sort_order: number
+}

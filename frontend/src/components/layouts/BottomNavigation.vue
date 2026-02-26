@@ -7,10 +7,11 @@ const route = useRoute()
 
 const tabs = [
   { path: '/', label: 'ホーム', icon: '🏠' },
+  { path: '/accounts', label: '口座', icon: '🏦' },
+  { path: '/investments', label: '資産', icon: '📊' },
   { path: '/income', label: '収入', icon: '📈' },
   { path: '/expense', label: '支出', icon: '🧾' },
   { path: '/transactions', label: '取引', icon: '💳' },
-  { path: '/assets', label: '現預貯金', icon: '🏦' },
   { path: '/settings', label: '設定', icon: '⚙️' },
 ]
 
