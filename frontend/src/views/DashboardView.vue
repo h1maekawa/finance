@@ -144,6 +144,17 @@ const chartOptions = {
       <p class="dashboard__today-message">{{ todaySpendableMessage }}</p>
     </section>
 
+    <section class="dashboard__summary-grid">
+      <article class="dashboard__summary-card">
+        <h2 class="dashboard__summary-label">今月の収入合計</h2>
+        <p class="dashboard__summary-value dashboard__summary-value--income">{{ totalIncome.toLocaleString() }}円</p>
+      </article>
+      <article class="dashboard__summary-card">
+        <h2 class="dashboard__summary-label">今月の支出合計</h2>
+        <p class="dashboard__summary-value dashboard__summary-value--expense">{{ totalExpense.toLocaleString() }}円</p>
+      </article>
+    </section>
+
     <section class="dashboard__section dashboard__section--month-picker">
       <label class="dashboard__month-label">表示月</label>
       <input v-model="monthInput" type="month" class="dashboard__month-input" />
@@ -242,6 +253,39 @@ const chartOptions = {
   margin: 0.25rem 0 0 0;
   font-size: 1rem;
   opacity: 0.95;
+}
+
+.dashboard__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard__summary-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.dashboard__summary-label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.dashboard__summary-value {
+  margin: 0.35rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.dashboard__summary-value--income {
+  color: #059669;
+}
+
+.dashboard__summary-value--expense {
+  color: #dc2626;
 }
 
 .dashboard__month-label {
