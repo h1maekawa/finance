@@ -4,6 +4,7 @@ import { reactive } from 'vue'
 export interface AuthUser {
   id: string
   email?: string | null
+  name?: string | null
 }
 
 export const sessionStore = reactive<{

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import MobileHeader from '@/components/layouts/MobileHeader.vue'
+import { sessionStore } from '@/stores/session'
 
 const route = useRoute()
 
@@ -18,8 +19,12 @@ const title = computed(() => {
   if (route.path === '/categories') return 'カテゴリ管理'
   return '資金形成アプリ'
 })
+
+const accountLabel = computed(() =>
+  sessionStore.user?.email || sessionStore.user?.id || '',
+)
 </script>
 
 <template>
-  <MobileHeader :title="title" />
+  <MobileHeader :title="title" :account-label="accountLabel" />
 </template>

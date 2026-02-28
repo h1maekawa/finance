@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 import { useSavingsGoal } from '@/composables/useSavingsGoal'
 import { useHousehold } from '@/composables/useHousehold'
 import { useNotificationChannels } from '@/composables/useNotificationChannels'
+import { sessionStore } from '@/stores/session'
 
 const { currentHouseholdId } = useHousehold()
 const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
@@ -23,6 +24,15 @@ const {
   fetchLineChannel,
   saveLineChannel,
 } = useNotificationChannels()
+
+const accountName = computed(() => {
+  if (sessionStore.user?.name?.trim()) return sessionStore.user.name
+  if (sessionStore.user?.email) return sessionStore.user.email.split('@')[0]
+  return '未設定'
+})
+
+const accountEmail = computed(() => sessionStore.user?.email ?? '未設定')
+const accountUid = computed(() => sessionStore.user?.id ?? '未設定')
 
 watch(
   [goal.targetAmount, goal.targetYear],
@@ -82,6 +92,13 @@ onMounted(async () => {
 
 <template>
   <main class="row" style="flex-direction: column;">
+    <section class="card">
+      <h2>ログイン中アカウント</h2>
+      <p style="margin: 0.2rem 0;">表示名: {{ accountName }}</p>
+      <p style="margin: 0.2rem 0;">メール: {{ accountEmail }}</p>
+      <p style="margin: 0.2rem 0; word-break: break-all;">UID: {{ accountUid }}</p>
+    </section>
+
     <section class="card">
       <h1>設定</h1>
       <p style="margin-top: 0; color: #6b7280;">目標金額をここで変更できます。</p>

@@ -6,8 +6,8 @@ import type { AuthUser } from '@/stores/session'
 
 let subscribed = false
 
-function mapFirebaseUserToAuthUser(uid: string, email?: string | null): AuthUser {
-  return { id: uid, email: email ?? null }
+function mapFirebaseUserToAuthUser(uid: string, email?: string | null, name?: string | null): AuthUser {
+  return { id: uid, email: email ?? null, name: name ?? null }
 }
 
 export function useAuth() {
@@ -22,7 +22,7 @@ export function useAuth() {
       let resolved = false
       onAuthStateChanged(firebaseAuth, (user) => {
         sessionStore.user = user
-          ? mapFirebaseUserToAuthUser(user.uid, user.email ?? undefined)
+          ? mapFirebaseUserToAuthUser(user.uid, user.email ?? undefined, user.displayName ?? undefined)
           : null
         sessionStore.initialized = true
         if (!resolved) {
