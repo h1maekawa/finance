@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useStocks } from '@/composables/useStocks'
 import { useHousehold } from '@/composables/useHousehold'
 import { useSecuritiesAccounts } from '@/composables/useSecuritiesAccounts'
@@ -13,6 +13,7 @@ const {
   fetchStocks,
   addStock,
   deleteStock,
+  updateFundPrice,
   updatePrices,
 } = useStocks()
 
@@ -28,6 +29,7 @@ const quantityInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
 const currentPriceInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
+const fundPriceInputs = ref<Record<string, number>>({})
 
 let autoTimer: number | null = null
 
@@ -107,6 +109,14 @@ function profitClass(value: number) {
   return ''
 }
 
+function syncFundPriceInputs() {
+  const next: Record<string, number> = {}
+  for (const row of fundRows.value) {
+    next[row.id] = Number(row.current_price ?? 0)
+  }
+  fundPriceInputs.value = next
+}
+
 async function handleAddInvestment() {
   formError.value = ''
 
@@ -161,7 +171,9 @@ async function handleUpdatePrices() {
   try {
     await updatePrices()
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '価格更新に失敗しました。'
+    formError.value = error instanceof Error
+      ? `個別株の価格更新に失敗しました。(${error.message})`
+      : '個別株の価格更新に失敗しました。'
   }
 }
 
@@ -171,6 +183,16 @@ async function handleDelete(id: string) {
     await deleteStock(id)
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '削除に失敗しました。'
+  }
+}
+
+async function handleSaveFundPrice(id: string) {
+  formError.value = ''
+  try {
+    await updateFundPrice(id, fundPriceInputs.value[id] ?? 0)
+    syncFundPriceInputs()
+  } catch (error) {
+    formError.value = error instanceof Error ? error.message : '投資信託価格の保存に失敗しました。'
   }
 }
 
@@ -186,6 +208,14 @@ onBeforeUnmount(() => {
     window.clearInterval(autoTimer)
   }
 })
+
+watch(
+  fundRows,
+  () => {
+    syncFundPriceInputs()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -287,7 +317,12 @@ onBeforeUnmount(() => {
             <td>{{ row.account_type }}</td>
             <td>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</td>
             <td>{{ formatNumber(Number(row.average_price), 2) }}</td>
-            <td>{{ formatNumber(Number(row.current_price), 2) }}</td>
+            <td>
+              <div class="stocks-view__fund-price-cell">
+                <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
+                <button @click="handleSaveFundPrice(row.id)">保存</button>
+              </div>
+            </td>
             <td>{{ formatNumber(Number(row.evaluation_amount), 0) }}</td>
             <td :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}</td>
             <td :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</td>
@@ -461,5 +496,16 @@ onBeforeUnmount(() => {
 .stocks-view__profit--minus {
   color: #2563eb;
   font-weight: 700;
+}
+
+.stocks-view__fund-price-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.stocks-view__fund-price-cell input {
+  width: 120px;
 }
 </style>

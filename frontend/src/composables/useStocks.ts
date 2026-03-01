@@ -102,6 +102,39 @@ export function useStocks() {
     stocks.value = stocks.value.filter((s) => s.id !== id)
   }
 
+  async function updateFundPrice(id: string, nextCurrentPrice: number) {
+    const row = stocks.value.find((item) => item.id === id)
+    if (!row) {
+      throw new Error('対象データが見つかりません。')
+    }
+    if (row.type !== 'fund') {
+      throw new Error('投資信託のみ手動価格更新できます。')
+    }
+
+    const currentPrice = Math.max(0, Number(nextCurrentPrice || 0))
+    const quantity = Number(row.quantity ?? 0)
+    const averagePrice = Number(row.average_price ?? 0)
+    const evaluationAmount = currentPrice * quantity
+    const profitLoss = (currentPrice - averagePrice) * quantity
+    const profitLossRate = averagePrice > 0
+      ? ((currentPrice - averagePrice) / averagePrice) * 100
+      : 0
+
+    const { error } = await supabase
+      .from('investments')
+      .update({
+        current_price: currentPrice,
+        evaluation_amount: evaluationAmount,
+        profit_loss: profitLoss,
+        profit_loss_rate: profitLossRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    if (error) throw error
+    await fetchStocks()
+  }
+
   async function updatePrices() {
     updatingPrices.value = true
     updateErrors.value = []
@@ -134,6 +167,7 @@ export function useStocks() {
     fetchStocks,
     addStock,
     deleteStock,
+    updateFundPrice,
     updatePrices,
   }
 }
