@@ -1,4 +1,4 @@
-const admin = require('firebase-admin')
+import admin from 'firebase-admin'
 
 function requiredEnv(name) {
   const value = process.env[name]
@@ -45,6 +45,6 @@ async function verifyFirebaseTokenFromRequest(req) {
   return decoded
 }
 
-module.exports = {
+export {
   verifyFirebaseTokenFromRequest,
 }

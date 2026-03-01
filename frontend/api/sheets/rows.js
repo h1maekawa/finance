@@ -1,11 +1,11 @@
-const { getSheetsApi, getSheetConfig } = require('./_client')
-const { verifyFirebaseTokenFromRequest } = require('./_auth')
+import { getSheetsApi, getSheetConfig } from './_client.js'
+import { verifyFirebaseTokenFromRequest } from './_auth.js'
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload)
 }
 
-module.exports = async (req, res) => {
+export default async (req, res) => {
   if (req.method !== 'GET') {
     return sendJson(res, 405, { error: 'method_not_allowed' })
   }

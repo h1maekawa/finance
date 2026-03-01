@@ -1,4 +1,4 @@
-const { google } = require('googleapis')
+import { google } from 'googleapis'
 
 function requiredEnv(name) {
   const value = process.env[name]
@@ -31,7 +31,7 @@ async function getSheetsApi() {
   return google.sheets({ version: 'v4', auth: authClient })
 }
 
-module.exports = {
+export {
   getSheetsApi,
   getSheetConfig,
 }
