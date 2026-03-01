@@ -17,6 +17,7 @@ type StockInput = {
   quantity: number
   average_price: number
   current_price?: number | null
+  evaluation_amount?: number | null
 }
 
 export function useStocks() {
@@ -81,10 +82,14 @@ export function useStocks() {
     const quantity = Math.max(0, Number(input.quantity || 0))
     const averagePrice = Math.max(0, Number(input.average_price || 0))
     const currentPrice = Math.max(0, Number(input.current_price ?? averagePrice))
-    const evaluationAmount = currentPrice * quantity
-    const profitLoss = (currentPrice - averagePrice) * quantity
-    const profitLossRate = averagePrice > 0
-      ? ((currentPrice - averagePrice) / averagePrice) * 100
+    const manualEvaluation = Math.max(0, Number(input.evaluation_amount ?? 0))
+    const evaluationAmount = input.type === 'fund'
+      ? manualEvaluation
+      : currentPrice * quantity
+    const costAmount = averagePrice * quantity
+    const profitLoss = evaluationAmount - costAmount
+    const profitLossRate = costAmount > 0
+      ? (profitLoss / costAmount) * 100
       : 0
 
     const payload = {
@@ -148,7 +153,7 @@ export function useStocks() {
     }
   }
 
-  async function updateFundPrice(id: string, nextCurrentPrice: number) {
+  async function updateFundPrice(id: string, nextCurrentPrice: number, nextEvaluationAmount: number) {
     const row = stocks.value.find((item) => item.id === id)
     if (!row) {
       throw new Error('対象データが見つかりません。')
@@ -158,12 +163,13 @@ export function useStocks() {
     }
 
     const currentPrice = Math.max(0, Number(nextCurrentPrice || 0))
-    const quantity = Number(row.quantity ?? 0)
     const averagePrice = Number(row.average_price ?? 0)
-    const evaluationAmount = currentPrice * quantity
-    const profitLoss = (currentPrice - averagePrice) * quantity
-    const profitLossRate = averagePrice > 0
-      ? ((currentPrice - averagePrice) / averagePrice) * 100
+    const quantity = Number(row.quantity ?? 0)
+    const evaluationAmount = Math.max(0, Number(nextEvaluationAmount || 0))
+    const costAmount = averagePrice * quantity
+    const profitLoss = evaluationAmount - costAmount
+    const profitLossRate = costAmount > 0
+      ? (profitLoss / costAmount) * 100
       : 0
 
     const { error } = await supabase

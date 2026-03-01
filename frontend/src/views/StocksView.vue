@@ -33,8 +33,10 @@ const accountTypeInput = ref('')
 const quantityInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
 const currentPriceInput = ref<number | undefined>(undefined)
+const evaluationAmountInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
 const fundPriceInputs = ref<Record<string, number>>({})
+const fundEvaluationInputs = ref<Record<string, number>>({})
 const expandedRows = ref<Record<string, boolean>>({})
 
 let autoTimer: number | null = null
@@ -130,11 +132,14 @@ function isDetailOpen(id: string) {
 }
 
 function syncFundPriceInputs() {
-  const next: Record<string, number> = {}
+  const nextPrice: Record<string, number> = {}
+  const nextEval: Record<string, number> = {}
   for (const row of fundRows.value) {
-    next[row.id] = Number(row.current_price ?? 0)
+    nextPrice[row.id] = Number(row.current_price ?? 0)
+    nextEval[row.id] = Number(row.evaluation_amount ?? 0)
   }
-  fundPriceInputs.value = next
+  fundPriceInputs.value = nextPrice
+  fundEvaluationInputs.value = nextEval
 }
 
 async function handleAddInvestment() {
@@ -148,6 +153,10 @@ async function handleAddInvestment() {
     formError.value = '銘柄名を入力してください。'
     return
   }
+  if (typeInput.value === 'fund' && !(Number(evaluationAmountInput.value ?? 0) > 0)) {
+    formError.value = '投資信託は評価額を入力してください。'
+    return
+  }
 
   try {
     await addStock({
@@ -158,6 +167,7 @@ async function handleAddInvestment() {
       quantity: quantityInput.value ?? 0,
       average_price: averagePriceInput.value ?? 0,
       current_price: typeInput.value === 'fund' ? (currentPriceInput.value ?? averagePriceInput.value ?? 0) : undefined,
+      evaluation_amount: typeInput.value === 'fund' ? (evaluationAmountInput.value ?? 0) : undefined,
     })
 
     symbolInput.value = ''
@@ -167,6 +177,7 @@ async function handleAddInvestment() {
     quantityInput.value = undefined
     averagePriceInput.value = undefined
     currentPriceInput.value = undefined
+    evaluationAmountInput.value = undefined
     showAddModal.value = false
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '登録に失敗しました。'
@@ -209,7 +220,11 @@ async function handleDelete(id: string) {
 async function handleSaveFundPrice(id: string) {
   formError.value = ''
   try {
-    await updateFundPrice(id, fundPriceInputs.value[id] ?? 0)
+    await updateFundPrice(
+      id,
+      fundPriceInputs.value[id] ?? 0,
+      fundEvaluationInputs.value[id] ?? 0,
+    )
     syncFundPriceInputs()
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '投資信託価格の保存に失敗しました。'
@@ -337,6 +352,15 @@ watch(
             min="0"
             placeholder="現在価格（投資信託/ETFは手動）"
           />
+          <input
+            v-if="typeInput === 'fund'"
+            v-model.number="evaluationAmountInput"
+            type="number"
+            step="1"
+            min="0"
+            placeholder="評価額（投資信託/ETFは手動）"
+            required
+          />
           <div style="display: flex; gap: 0.5rem;">
             <button type="submit">登録する</button>
             <button type="button" @click="showAddModal = false">閉じる</button>
@@ -441,6 +465,7 @@ watch(
               <p class="stocks-view__metric-label">現在価格</p>
               <div class="stocks-view__fund-price-cell">
                 <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
+                <input v-model.number="fundEvaluationInputs[row.id]" type="number" step="1" min="0" placeholder="評価額" />
                 <button type="button" @click="handleSaveFundPrice(row.id)">保存</button>
               </div>
             </div>
