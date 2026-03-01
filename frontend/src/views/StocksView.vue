@@ -38,6 +38,7 @@ const showAddModal = ref(false)
 const fundPriceInputs = ref<Record<string, number>>({})
 const fundEvaluationInputs = ref<Record<string, number>>({})
 const expandedRows = ref<Record<string, boolean>>({})
+const usdJpyRate = ref(150)
 
 let autoTimer: number | null = null
 
@@ -119,7 +120,7 @@ function profitClass(value: number) {
 
 function currentValueText(type: 'stock' | 'fund', value: number) {
   return type === 'stock'
-    ? `${formatNumber(Number(value), 2)}USドル`
+    ? `${formatNumber(Number(value) * Number(usdJpyRate.value), 0)}円 (${formatNumber(Number(value), 2)}USドル)`
     : `${formatNumber(Number(value), 2)}円`
 }
 
@@ -260,6 +261,10 @@ watch(
       <p class="stocks-view__summary-value">評価額合計: {{ formatNumber(totalEvaluationAmount, 0) }} 円</p>
       <p class="stocks-view__summary-sub">評価損益合計: <span :class="profitClass(totalProfitLoss)">{{ formatNumber(totalProfitLoss, 0) }} 円</span></p>
       <p class="stocks-view__summary-sub">評価損益率合計: <span :class="profitClass(totalProfitLossRate)">{{ formatNumber(totalProfitLossRate, 2) }}%</span></p>
+      <label class="stocks-view__fx-input">
+        <span>USD/JPY</span>
+        <input v-model.number="usdJpyRate" type="number" min="1" step="0.01" />
+      </label>
       <button class="stocks-view__update-btn" :disabled="updatingPrices" @click="handleUpdatePrices">
         {{ updatingPrices ? '更新中...' : '価格更新（Google Sheets）' }}
       </button>
@@ -387,7 +392,7 @@ watch(
           <div class="stocks-view__item-main">
             <div>
               <p class="stocks-view__metric-label">現在価格</p>
-              <p class="stocks-view__metric-value">{{ formatNumber(Number(row.current_price), 2) }}</p>
+              <p class="stocks-view__metric-value">{{ currentValueText(row.type, Number(row.current_price)) }}</p>
             </div>
             <div>
               <p class="stocks-view__metric-label">評価損益率</p>
@@ -554,6 +559,18 @@ watch(
 .stocks-view__summary-sub {
   margin: 0.2rem 0;
   font-size: 0.95rem;
+}
+
+.stocks-view__fx-input {
+  margin-top: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.stocks-view__fx-input input {
+  width: 110px;
 }
 
 .stocks-view__update-btn {
