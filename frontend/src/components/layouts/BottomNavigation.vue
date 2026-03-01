@@ -10,8 +10,7 @@ const tabs = [
   { path: '/goal', label: '目標', icon: '🎯' },
   { path: '/accounts', label: '口座', icon: '🏦' },
   { path: '/investments', label: '個別株', icon: '📊' },
-  { path: '/income', label: '収入', icon: '📈' },
-  { path: '/expense', label: '支出', icon: '🧾' },
+  { path: '/cashflow', label: '収支', icon: '🧾' },
   { path: '/register', label: '登録', icon: '📝' },
   { path: '/settings', label: '設定', icon: '⚙️' },
 ]

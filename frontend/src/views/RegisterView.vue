@@ -13,8 +13,6 @@ const showCardModal = ref(false)
 const newName = ref('')
 const newBalance = ref<number | undefined>(undefined)
 const cardNameInput = ref('')
-const cardBrandInput = ref('')
-const cardLast4Input = ref('')
 const errorMessage = ref('')
 const cardErrorMessage = ref('')
 
@@ -31,6 +29,25 @@ const bankNameCandidates = [
   'SBI新生銀行',
 ]
 
+const cardNameCandidates = [
+  '楽天カード',
+  '楽天プレミアムカード',
+  '楽天ゴールドカード',
+  '三井住友カード（NL）',
+  '三井住友カード ゴールド（NL）',
+  'JCBカード W',
+  'JCBゴールド',
+  'エポスカード',
+  'イオンカードセレクト',
+  'dカード',
+  'dカード GOLD',
+  'PayPayカード',
+  'au PAY カード',
+  'セゾンカードインターナショナル',
+  '三菱UFJカード',
+  'アメリカン・エキスプレス・グリーン',
+]
+
 const filteredBankCandidates = computed(() => {
   const keyword = newName.value.trim().toLowerCase()
   if (!keyword) return bankNameCandidates.slice(0, 6)
@@ -41,6 +58,18 @@ const filteredBankCandidates = computed(() => {
 
 function selectBankCandidate(name: string) {
   newName.value = name
+}
+
+const filteredCardCandidates = computed(() => {
+  const keyword = cardNameInput.value.trim().toLowerCase()
+  if (!keyword) return cardNameCandidates.slice(0, 8)
+  return cardNameCandidates
+    .filter((name) => name.toLowerCase().includes(keyword))
+    .slice(0, 8)
+})
+
+function selectCardCandidate(name: string) {
+  cardNameInput.value = name
 }
 
 async function handleAdd() {
@@ -70,13 +99,9 @@ async function handleAddCard() {
   try {
     await addCreditCard({
       card_name: cardNameInput.value,
-      brand: cardBrandInput.value || null,
-      last4: cardLast4Input.value || null,
       is_active: true,
     })
     cardNameInput.value = ''
-    cardBrandInput.value = ''
-    cardLast4Input.value = ''
     showCardModal.value = false
   } catch (error) {
     cardErrorMessage.value = error instanceof Error ? error.message : 'カード登録に失敗しました。'
@@ -114,7 +139,6 @@ async function handleAddCard() {
       <ul v-else class="register-view__list">
         <li v-for="card in creditCards" :key="card.id" class="register-view__item">
           <span>{{ card.card_name }}</span>
-          <span>{{ card.brand ?? 'ブランド未設定' }} {{ card.last4 ? `****${card.last4}` : '' }}</span>
         </li>
       </ul>
     </section>
@@ -164,17 +188,16 @@ async function handleAddCard() {
             placeholder="カード名（例：楽天カード）"
             required
           />
-          <input
-            v-model="cardBrandInput"
-            type="text"
-            placeholder="ブランド（例：VISA）"
-          />
-          <input
-            v-model="cardLast4Input"
-            type="text"
-            maxlength="4"
-            placeholder="下4桁（例：1234）"
-          />
+          <ul v-if="filteredCardCandidates.length > 0" class="register-view__suggestions">
+            <li
+              v-for="candidate in filteredCardCandidates"
+              :key="candidate"
+              class="register-view__suggestion-item"
+              @click="selectCardCandidate(candidate)"
+            >
+              {{ candidate }}
+            </li>
+          </ul>
           <div class="register-view__actions">
             <button type="submit">登録する</button>
             <button type="button" class="register-view__close" @click="showCardModal = false">閉じる</button>
