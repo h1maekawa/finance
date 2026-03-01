@@ -5,6 +5,7 @@ import type { Stock } from '@/types/db'
 
 type StockInput = {
   symbol: string
+  instrument_type: 'stock' | 'fund' | 'etf'
   account_type?: string
   securities_account_id?: string | null
   shares: number
@@ -35,6 +36,7 @@ export function useStocks() {
         id,
         user_id,
         symbol,
+        instrument_type,
         account_type,
         securities_account_id,
         shares,
@@ -69,6 +71,7 @@ export function useStocks() {
     const payload = {
       user_id: userId,
       symbol: input.symbol.trim().toUpperCase(),
+      instrument_type: input.instrument_type,
       account_type: input.account_type?.trim() || '未設定',
       securities_account_id: input.securities_account_id ?? null,
       shares,

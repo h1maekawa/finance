@@ -20,6 +20,7 @@ const { activeSecuritiesAccounts } = useSecuritiesAccounts(() => currentHousehol
 
 const formError = ref('')
 const symbolInput = ref('')
+const instrumentTypeInput = ref<'stock' | 'fund' | 'etf'>('stock')
 const securitiesAccountIdInput = ref('')
 const sharesInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
@@ -65,6 +66,7 @@ const tableRows = computed(() =>
     id: stock.id,
     tradeLabel: '現物',
     symbol: stock.symbol,
+    instrumentType: stock.instrument_type,
     accountType: stock.account_type,
     securitiesAccountId: stock.securities_account_id,
     shares: Number(stock.shares ?? 0),
@@ -88,6 +90,10 @@ function resolveAccountLabel(row: { accountType: string; securitiesAccountId: st
   const account = activeSecuritiesAccounts.value.find((v) => v.id === row.securitiesAccountId)
   if (!account) return row.accountType
   return `${account.broker_name} / ${taxCategoryLabel[account.tax_category] ?? account.tax_category}`
+}
+
+function quantityUnit(type: 'stock' | 'fund' | 'etf') {
+  return type === 'stock' ? '株' : '口'
 }
 
 const totalProfitLoss = computed(() =>
@@ -125,6 +131,7 @@ async function handleAddStock() {
     const selectedAccount = activeSecuritiesAccounts.value.find((v) => v.id === securitiesAccountIdInput.value)
     await addStock({
       symbol: symbolInput.value,
+      instrument_type: instrumentTypeInput.value,
       account_type: selectedAccount
         ? `${selectedAccount.broker_name} / ${taxCategoryLabel[selectedAccount.tax_category] ?? selectedAccount.tax_category}`
         : '未設定',
@@ -133,6 +140,7 @@ async function handleAddStock() {
       average_price: averagePriceInput.value ?? 0,
     })
     symbolInput.value = ''
+    instrumentTypeInput.value = 'stock'
     securitiesAccountIdInput.value = ''
     sharesInput.value = undefined
     averagePriceInput.value = undefined
@@ -201,13 +209,25 @@ onMounted(() => {
               {{ candidate.symbol }} / {{ candidate.name }}
             </li>
           </ul>
+          <select v-model="instrumentTypeInput" required>
+            <option value="stock">個別株（株）</option>
+            <option value="fund">投資信託（口）</option>
+            <option value="etf">ETF（口）</option>
+          </select>
           <select v-model="securitiesAccountIdInput" required>
             <option value="">証券口座を選択（NISA/特定）</option>
             <option v-for="acc in activeSecuritiesAccounts" :key="acc.id" :value="acc.id">
               {{ acc.broker_name }} / {{ taxCategoryLabel[acc.tax_category] }}
             </option>
           </select>
-          <input v-model.number="sharesInput" type="number" step="0.0001" min="0" placeholder="保有数量" required />
+          <input
+            v-model.number="sharesInput"
+            type="number"
+            step="0.0001"
+            min="0"
+            :placeholder="`保有数量（${quantityUnit(instrumentTypeInput)}）`"
+            required
+          />
           <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
           <div style="display: flex; gap: 0.5rem;">
             <button type="submit">登録する</button>
@@ -242,7 +262,7 @@ onMounted(() => {
             <td>{{ row.tradeLabel }}</td>
             <td>{{ row.symbol }}</td>
             <td>{{ resolveAccountLabel(row) }}</td>
-            <td>{{ formatNumber(row.shares, 4) }}</td>
+            <td>{{ formatNumber(row.shares, 4) }}{{ quantityUnit(row.instrumentType) }}</td>
             <td>{{ formatNumber(row.averagePrice, 2) }}</td>
             <td>{{ formatNumber(row.currentPrice, 2) }}</td>
             <td>{{ formatNumber(row.evaluationAmount, 0) }}</td>

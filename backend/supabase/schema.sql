@@ -193,6 +193,9 @@ create table if not exists public.stocks (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
   symbol text not null,
+  instrument_type text not null default 'stock' check (
+    instrument_type in ('stock', 'fund', 'etf')
+  ),
   account_type text not null default '特定口座',
   shares numeric(20, 6) not null default 0,
   average_price numeric(20, 6) not null default 0,
@@ -320,6 +323,19 @@ if not exists (
 ) then
   alter table public.investment_assets
     add constraint investment_assets_quantity_non_negative check (quantity >= 0);
+end if;
+end $$;
+-- stocks 銘柄種別追加（既存DB向け）
+alter table public.stocks add column if not exists instrument_type text not null default 'stock';
+do $$ begin
+if not exists (
+  select 1
+  from pg_constraint
+  where conname = 'stocks_instrument_type_check'
+) then
+  alter table public.stocks
+    add constraint stocks_instrument_type_check
+    check (instrument_type in ('stock', 'fund', 'etf'));
 end if;
 end $$;
 -- transactions 支払手段（クレジットカード）追加
