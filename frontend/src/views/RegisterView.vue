@@ -1,15 +1,47 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useAccounts } from '@/composables/useAccounts'
 import { useHousehold } from '@/composables/useHousehold'
+import { useCreditCards } from '@/composables/useCreditCards'
 
 const { currentHouseholdId } = useHousehold()
 const { accounts, addAccount } = useAccounts(() => currentHouseholdId.value)
+const { creditCards, addCreditCard } = useCreditCards(() => currentHouseholdId.value)
 
 const showAddModal = ref(false)
+const showCardModal = ref(false)
 const newName = ref('')
 const newBalance = ref<number | undefined>(undefined)
+const cardNameInput = ref('')
+const cardBrandInput = ref('')
+const cardLast4Input = ref('')
 const errorMessage = ref('')
+const cardErrorMessage = ref('')
+
+const bankNameCandidates = [
+  '三井住友銀行',
+  '三菱UFJ銀行',
+  'みずほ銀行',
+  'りそな銀行',
+  '楽天銀行',
+  '住信SBIネット銀行',
+  'PayPay銀行',
+  'ゆうちょ銀行',
+  'イオン銀行',
+  'SBI新生銀行',
+]
+
+const filteredBankCandidates = computed(() => {
+  const keyword = newName.value.trim().toLowerCase()
+  if (!keyword) return bankNameCandidates.slice(0, 6)
+  return bankNameCandidates
+    .filter((name) => name.toLowerCase().includes(keyword))
+    .slice(0, 6)
+})
+
+function selectBankCandidate(name: string) {
+  newName.value = name
+}
 
 async function handleAdd() {
   errorMessage.value = ''
@@ -27,15 +59,42 @@ async function handleAdd() {
     errorMessage.value = error instanceof Error ? error.message : '登録に失敗しました。'
   }
 }
+
+async function handleAddCard() {
+  cardErrorMessage.value = ''
+  if (!cardNameInput.value.trim()) {
+    cardErrorMessage.value = 'カード名を入力してください。'
+    return
+  }
+
+  try {
+    await addCreditCard({
+      card_name: cardNameInput.value,
+      brand: cardBrandInput.value || null,
+      last4: cardLast4Input.value || null,
+      is_active: true,
+    })
+    cardNameInput.value = ''
+    cardBrandInput.value = ''
+    cardLast4Input.value = ''
+    showCardModal.value = false
+  } catch (error) {
+    cardErrorMessage.value = error instanceof Error ? error.message : 'カード登録に失敗しました。'
+  }
+}
 </script>
 
 <template>
   <main class="register-view">
     <section class="card register-view__hero">
       <h2 class="register-view__title">登録</h2>
-      <p class="register-view__desc">口座の新規登録はこちらから行います。</p>
-      <button type="button" class="register-view__btn" @click="showAddModal = true">口座を登録</button>
+      <p class="register-view__desc">口座とクレジットカードの新規登録はこちらから行います。</p>
+      <div class="register-view__hero-actions">
+        <button type="button" class="register-view__btn" @click="showAddModal = true">口座を登録</button>
+        <button type="button" class="register-view__btn" @click="showCardModal = true">カードを登録</button>
+      </div>
       <p v-if="errorMessage" class="register-view__error">{{ errorMessage }}</p>
+      <p v-if="cardErrorMessage" class="register-view__error">{{ cardErrorMessage }}</p>
     </section>
 
     <section class="card">
@@ -45,6 +104,17 @@ async function handleAdd() {
         <li v-for="account in accounts" :key="account.id" class="register-view__item">
           <span>{{ account.institution_name }}</span>
           <span>{{ account.balance.toLocaleString() }} 円</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h3 class="register-view__sub-title">登録済みクレジットカード</h3>
+      <p v-if="creditCards.length === 0" class="register-view__empty">まだカードが登録されていません</p>
+      <ul v-else class="register-view__list">
+        <li v-for="card in creditCards" :key="card.id" class="register-view__item">
+          <span>{{ card.card_name }}</span>
+          <span>{{ card.brand ?? 'ブランド未設定' }} {{ card.last4 ? `****${card.last4}` : '' }}</span>
         </li>
       </ul>
     </section>
@@ -59,6 +129,16 @@ async function handleAdd() {
             placeholder="金融機関名（例：三菱UFJ銀行）"
             required
           />
+          <ul v-if="filteredBankCandidates.length > 0" class="register-view__suggestions">
+            <li
+              v-for="candidate in filteredBankCandidates"
+              :key="candidate"
+              class="register-view__suggestion-item"
+              @click="selectBankCandidate(candidate)"
+            >
+              {{ candidate }}
+            </li>
+          </ul>
           <input
             v-model.number="newBalance"
             type="number"
@@ -69,6 +149,35 @@ async function handleAdd() {
           <div class="register-view__actions">
             <button type="submit">登録する</button>
             <button type="button" class="register-view__close" @click="showAddModal = false">閉じる</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div v-if="showCardModal" class="register-view__modal-overlay" @click.self="showCardModal = false">
+      <section class="register-view__modal card">
+        <h3 class="register-view__sub-title">クレジットカードを追加</h3>
+        <form class="register-view__form" @submit.prevent="handleAddCard">
+          <input
+            v-model="cardNameInput"
+            type="text"
+            placeholder="カード名（例：楽天カード）"
+            required
+          />
+          <input
+            v-model="cardBrandInput"
+            type="text"
+            placeholder="ブランド（例：VISA）"
+          />
+          <input
+            v-model="cardLast4Input"
+            type="text"
+            maxlength="4"
+            placeholder="下4桁（例：1234）"
+          />
+          <div class="register-view__actions">
+            <button type="submit">登録する</button>
+            <button type="button" class="register-view__close" @click="showCardModal = false">閉じる</button>
           </div>
         </form>
       </section>
@@ -104,6 +213,11 @@ async function handleAdd() {
   background: #ffffff;
   color: #0f766e;
   font-weight: 700;
+}
+
+.register-view__hero-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .register-view__error {
@@ -169,5 +283,27 @@ async function handleAdd() {
 
 .register-view__close {
   background: #6b7280;
+}
+
+.register-view__suggestions {
+  list-style: none;
+  margin: -0.1rem 0 0;
+  padding: 0.2rem;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  background: #fff;
+  max-height: 170px;
+  overflow: auto;
+}
+
+.register-view__suggestion-item {
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.register-view__suggestion-item:hover {
+  background: #eef2ff;
 }
 </style>

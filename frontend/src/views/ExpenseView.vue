@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ExpensePieChart from '@/components/charts/ExpensePieChart.vue'
 import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
 import { useMonthlySummary } from '@/composables/useMonthlySummary'
+import { useCreditCards } from '@/composables/useCreditCards'
+import { sessionStore } from '@/stores/session'
 
 const { currentHouseholdId } = useHousehold()
 const { categories } = useCategories(() => currentHouseholdId.value)
-const { transactions, selectedMonth, totalIncome, totalExpense } = useTransactions(() => currentHouseholdId.value)
+const { transactions, selectedMonth, totalIncome, totalExpense, createTransaction } = useTransactions(() => currentHouseholdId.value)
+const { activeCards } = useCreditCards(() => currentHouseholdId.value)
 
 const summary = useMonthlySummary(
   () => transactions.value,
@@ -33,6 +36,56 @@ const expenseByCategory = computed(() => {
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount)
 })
+
+const expenseCategories = computed(() =>
+  categories.value.filter((c) => c.kind === 'expense'),
+)
+
+const form = ref({
+  category_id: '',
+  amount: 0,
+  transaction_date: new Date().toISOString().slice(0, 10),
+  credit_card_id: '',
+  note: '',
+})
+
+const formError = ref('')
+const formMessage = ref('')
+
+async function submitExpense() {
+  formError.value = ''
+  formMessage.value = ''
+  const userId = sessionStore.user?.id
+  if (!userId) {
+    formError.value = 'ログイン情報がありません。'
+    return
+  }
+  if (!form.value.category_id) {
+    formError.value = 'カテゴリを選択してください。'
+    return
+  }
+  if (!form.value.amount || form.value.amount <= 0) {
+    formError.value = '金額を入力してください。'
+    return
+  }
+
+  try {
+    await createTransaction({
+      user_id: userId,
+      category_id: form.value.category_id,
+      kind: 'expense',
+      amount: Number(form.value.amount),
+      transaction_date: form.value.transaction_date,
+      note: form.value.note || null,
+      credit_card_id: form.value.credit_card_id || null,
+    })
+    form.value.amount = 0
+    form.value.note = ''
+    formMessage.value = '支出を登録しました。'
+  } catch (error) {
+    formError.value = error instanceof Error ? error.message : '支出登録に失敗しました。'
+  }
+}
 </script>
 
 <template>
@@ -76,6 +129,28 @@ const expenseByCategory = computed(() => {
           </tbody>
         </table>
       </article>
+    </section>
+
+    <section class="card">
+      <h3>支出登録</h3>
+      <div class="row">
+        <select v-model="form.category_id">
+          <option value="">カテゴリを選択</option>
+          <option v-for="c in expenseCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+        </select>
+        <input v-model.number="form.amount" type="number" min="1" placeholder="金額" />
+        <input v-model="form.transaction_date" type="date" />
+        <select v-model="form.credit_card_id">
+          <option value="">支払い方法（現金/口座）</option>
+          <option v-for="card in activeCards" :key="card.id" :value="card.id">
+            {{ card.card_name }}{{ card.last4 ? ` (****${card.last4})` : '' }}
+          </option>
+        </select>
+        <input v-model="form.note" placeholder="メモ" />
+        <button @click="submitExpense">支出を追加</button>
+      </div>
+      <p v-if="formMessage" style="margin: 0.5rem 0 0; color: #059669;">{{ formMessage }}</p>
+      <p v-if="formError" style="margin: 0.5rem 0 0; color: #dc2626;">{{ formError }}</p>
     </section>
   </main>
 </template>

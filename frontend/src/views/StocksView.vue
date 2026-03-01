@@ -21,6 +21,35 @@ const sharesInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
 
+const stockCandidates = [
+  { symbol: 'NVDA', name: 'エヌビディア' },
+  { symbol: 'AAPL', name: 'アップル' },
+  { symbol: 'MSFT', name: 'マイクロソフト' },
+  { symbol: 'GOOGL', name: 'アルファベット' },
+  { symbol: 'AMZN', name: 'アマゾン' },
+  { symbol: 'META', name: 'メタ・プラットフォームズ' },
+  { symbol: 'TSLA', name: 'テスラ' },
+  { symbol: 'KO', name: 'コカ・コーラ' },
+  { symbol: 'MU', name: 'マイクロン・テクノロジー' },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
+  { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF' },
+  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF' },
+]
+
+const filteredStockCandidates = computed(() => {
+  const keyword = symbolInput.value.trim().toLowerCase()
+  if (!keyword) return stockCandidates.slice(0, 8)
+  return stockCandidates
+    .filter((item) =>
+      item.symbol.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword),
+    )
+    .slice(0, 8)
+})
+
+function selectStockCandidate(symbol: string) {
+  symbolInput.value = symbol
+}
+
 const tableRows = computed(() =>
   stocks.value.map((stock) => ({
     id: stock.id,
@@ -133,6 +162,16 @@ onMounted(() => {
         <h3 style="margin-top: 0;">銘柄追加</h3>
         <form class="stocks-view__form" @submit.prevent="handleAddStock">
           <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: AAPL）" required />
+          <ul v-if="filteredStockCandidates.length > 0" class="stocks-view__suggestions">
+            <li
+              v-for="candidate in filteredStockCandidates"
+              :key="candidate.symbol"
+              class="stocks-view__suggestion-item"
+              @click="selectStockCandidate(candidate.symbol)"
+            >
+              {{ candidate.symbol }} / {{ candidate.name }}
+            </li>
+          </ul>
           <input v-model="accountTypeInput" type="text" placeholder="口座区分（例: 特定口座）" required />
           <input v-model.number="sharesInput" type="number" step="0.0001" min="0" placeholder="保有数量" required />
           <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
@@ -252,6 +291,28 @@ onMounted(() => {
 
 .stocks-view__modal {
   width: min(520px, 100%);
+}
+
+.stocks-view__suggestions {
+  list-style: none;
+  margin: -0.1rem 0 0;
+  padding: 0.2rem;
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  background: #fff;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.stocks-view__suggestion-item {
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.stocks-view__suggestion-item:hover {
+  background: #eef2ff;
 }
 
 .stocks-view__table-wrap {

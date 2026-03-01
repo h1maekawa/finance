@@ -146,6 +146,17 @@ create table if not exists public.bank_accounts (
   updated_at timestamptz not null default now(),
   constraint bank_accounts_balance_non_negative check (balance >= 0)
 );
+create table if not exists public.credit_cards (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  card_name text not null,
+  brand text,
+  last4 text,
+  sort_order int not null default 0,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 create table if not exists public.investment_assets (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
@@ -284,6 +295,19 @@ if not exists (
     add constraint investment_assets_quantity_non_negative check (quantity >= 0);
 end if;
 end $$;
+-- transactions 支払手段（クレジットカード）追加
+alter table public.transactions add column if not exists credit_card_id uuid;
+do $$ begin
+if not exists (
+  select 1
+  from pg_constraint
+  where conname = 'transactions_credit_card_id_fkey'
+) then
+  alter table public.transactions
+    add constraint transactions_credit_card_id_fkey
+    foreign key (credit_card_id) references public.credit_cards(id) on delete set null;
+end if;
+end $$;
 -- ------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------
@@ -296,6 +320,7 @@ create index if not exists idx_budgets_household_period_start on public.budgets 
 create index if not exists idx_household_settings_household_id on public.household_settings (household_id);
 create index if not exists idx_household_assets_household_id on public.household_assets (household_id);
 create index if not exists idx_bank_accounts_household_id on public.bank_accounts (household_id, sort_order);
+create index if not exists idx_credit_cards_household_id on public.credit_cards (household_id, sort_order);
 create index if not exists idx_investment_assets_household_id on public.investment_assets (household_id, sort_order);
 create index if not exists idx_investment_assets_household_ticker on public.investment_assets (household_id, ticker);
 create index if not exists idx_investment_assets_notify_tp on public.investment_assets (household_id, notify_take_profit);
@@ -463,6 +488,11 @@ create trigger trg_bank_accounts_timestamps before
 insert
   or
 update on public.bank_accounts for each row execute function public.set_timestamps();
+drop trigger if exists trg_credit_cards_timestamps on public.credit_cards;
+create trigger trg_credit_cards_timestamps before
+insert
+  or
+update on public.credit_cards for each row execute function public.set_timestamps();
 drop trigger if exists trg_investment_assets_timestamps on public.investment_assets;
 create trigger trg_investment_assets_timestamps before
 insert
@@ -490,6 +520,7 @@ alter table public.budgets enable row level security;
 alter table public.household_settings enable row level security;
 alter table public.household_assets enable row level security;
 alter table public.bank_accounts enable row level security;
+alter table public.credit_cards enable row level security;
 alter table public.investment_assets enable row level security;
 alter table public.stocks enable row level security;
 alter table public.user_notification_channels enable row level security;
@@ -556,6 +587,9 @@ create policy household_assets_all_member on public.household_assets for all usi
 -- bank_accounts
 drop policy if exists bank_accounts_all_member on public.bank_accounts;
 create policy bank_accounts_all_member on public.bank_accounts for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));
+-- credit_cards
+drop policy if exists credit_cards_all_member on public.credit_cards;
+create policy credit_cards_all_member on public.credit_cards for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));
 -- investment_assets
 drop policy if exists investment_assets_all_member on public.investment_assets;
 create policy investment_assets_all_member on public.investment_assets for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));

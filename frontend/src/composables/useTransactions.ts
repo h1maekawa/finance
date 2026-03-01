@@ -38,7 +38,7 @@ export function useTransactions(householdId: () => string | null) {
     loading.value = true
     const { data, error } = await supabase
       .from('transactions')
-      .select('id, household_id, user_id, category_id, kind, amount, transaction_date, note')
+      .select('id, household_id, user_id, category_id, credit_card_id, kind, amount, transaction_date, note')
       .eq('household_id', hid)
       .gte('transaction_date', monthRange.value.start)
       .lt('transaction_date', monthRange.value.end)
@@ -55,6 +55,7 @@ export function useTransactions(householdId: () => string | null) {
     amount: number
     transaction_date: string
     note?: string | null
+    credit_card_id?: string | null
     user_id: string
   }) {
     const hid = householdId()

@@ -3,7 +3,10 @@ import { supabase } from '@/lib/supabase'
 import type { Household } from '@/types/db'
 
 const households = ref<Household[]>([])
-const devHouseholdId = import.meta.env.VITE_DEV_HOUSEHOLD_ID as string | undefined
+const rawDevHouseholdId = import.meta.env.VITE_DEV_HOUSEHOLD_ID as string | undefined
+const devHouseholdId = rawDevHouseholdId && !rawDevHouseholdId.startsWith('YOUR_')
+  ? rawDevHouseholdId
+  : undefined
 const currentHouseholdId = ref<string | null>(devHouseholdId ?? null)
 
 export function useHousehold() {

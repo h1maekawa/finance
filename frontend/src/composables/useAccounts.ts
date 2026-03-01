@@ -32,7 +32,9 @@ export function useAccounts(householdId: () => string | null) {
 
     async function addAccount(institutionName: string, balance: number) {
         const hid = householdId()
-        if (!hid) return
+        if (!hid) {
+            throw new Error('家計グループが未選択です。再ログイン後にお試しください。')
+        }
 
         const safeBalance = Math.max(0, Math.floor(Number(balance || 0)))
         const nextOrder = accounts.value.length > 0
@@ -55,6 +57,11 @@ export function useAccounts(householdId: () => string | null) {
     }
 
     async function updateAccount(id: string, patch: Partial<Pick<BankAccount, 'institution_name' | 'balance'>>) {
+        const hid = householdId()
+        if (!hid) {
+            throw new Error('家計グループが未選択です。再ログイン後にお試しください。')
+        }
+
         const update: Record<string, unknown> = {}
         if (patch.institution_name !== undefined) update.institution_name = patch.institution_name.trim()
         if (patch.balance !== undefined) update.balance = Math.max(0, Math.floor(Number(patch.balance || 0)))
@@ -63,6 +70,7 @@ export function useAccounts(householdId: () => string | null) {
             .from('bank_accounts')
             .update(update)
             .eq('id', id)
+            .eq('household_id', hid)
 
         if (error) throw error
 
@@ -73,10 +81,16 @@ export function useAccounts(householdId: () => string | null) {
     }
 
     async function deleteAccount(id: string) {
+        const hid = householdId()
+        if (!hid) {
+            throw new Error('家計グループが未選択です。再ログイン後にお試しください。')
+        }
+
         const { error } = await supabase
             .from('bank_accounts')
             .delete()
             .eq('id', id)
+            .eq('household_id', hid)
 
         if (error) throw error
         accounts.value = accounts.value.filter((a) => a.id !== id)

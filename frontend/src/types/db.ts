@@ -28,6 +28,7 @@ export type Transaction = {
   household_id: string
   user_id: string
   category_id: string
+  credit_card_id: string | null
   kind: TransactionKind
   amount: number
   transaction_date: string
@@ -40,6 +41,16 @@ export type BankAccount = {
   institution_name: string
   balance: number
   sort_order: number
+}
+
+export type CreditCard = {
+  id: string
+  household_id: string
+  card_name: string
+  brand: string | null
+  last4: string | null
+  sort_order: number
+  is_active: boolean
 }
 
 export type InvestmentAsset = {
