@@ -5,14 +5,19 @@ import { useHousehold } from '@/composables/useHousehold'
 import { useCreditCards } from '@/composables/useCreditCards'
 
 const { currentHouseholdId } = useHousehold()
-const { accounts, addAccount } = useAccounts(() => currentHouseholdId.value)
-const { creditCards, addCreditCard } = useCreditCards(() => currentHouseholdId.value)
+const { accounts, addAccount, updateAccount, deleteAccount } = useAccounts(() => currentHouseholdId.value)
+const { creditCards, addCreditCard, updateCreditCard, deleteCreditCard } = useCreditCards(() => currentHouseholdId.value)
 
 const showAddModal = ref(false)
 const showCardModal = ref(false)
 const newName = ref('')
 const newBalance = ref<number | undefined>(undefined)
 const cardNameInput = ref('')
+const editingAccountId = ref<string | null>(null)
+const editAccountName = ref('')
+const editAccountBalance = ref<number>(0)
+const editingCardId = ref<string | null>(null)
+const editCardName = ref('')
 const errorMessage = ref('')
 const cardErrorMessage = ref('')
 
@@ -107,6 +112,73 @@ async function handleAddCard() {
     cardErrorMessage.value = error instanceof Error ? error.message : 'カード登録に失敗しました。'
   }
 }
+
+function startEditAccount(account: { id: string; institution_name: string; balance: number }) {
+  editingAccountId.value = account.id
+  editAccountName.value = account.institution_name
+  editAccountBalance.value = account.balance
+}
+
+function cancelEditAccount() {
+  editingAccountId.value = null
+}
+
+async function saveEditAccount(id: string) {
+  errorMessage.value = ''
+  try {
+    await updateAccount(id, {
+      institution_name: editAccountName.value,
+      balance: editAccountBalance.value,
+    })
+    editingAccountId.value = null
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '口座更新に失敗しました。'
+  }
+}
+
+async function removeAccount(id: string) {
+  errorMessage.value = ''
+  if (!confirm('この口座を削除しますか？')) return
+  try {
+    await deleteAccount(id)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '口座削除に失敗しました。'
+  }
+}
+
+function startEditCard(card: { id: string; card_name: string }) {
+  editingCardId.value = card.id
+  editCardName.value = card.card_name
+}
+
+function cancelEditCard() {
+  editingCardId.value = null
+}
+
+async function saveEditCard(id: string) {
+  cardErrorMessage.value = ''
+  if (!editCardName.value.trim()) {
+    cardErrorMessage.value = 'カード名を入力してください。'
+    return
+  }
+
+  try {
+    await updateCreditCard(id, { card_name: editCardName.value })
+    editingCardId.value = null
+  } catch (error) {
+    cardErrorMessage.value = error instanceof Error ? error.message : 'カード更新に失敗しました。'
+  }
+}
+
+async function removeCard(id: string) {
+  cardErrorMessage.value = ''
+  if (!confirm('このカードを削除しますか？')) return
+  try {
+    await deleteCreditCard(id)
+  } catch (error) {
+    cardErrorMessage.value = error instanceof Error ? error.message : 'カード削除に失敗しました。'
+  }
+}
 </script>
 
 <template>
@@ -127,8 +199,24 @@ async function handleAddCard() {
       <p v-if="accounts.length === 0" class="register-view__empty">まだ口座が登録されていません</p>
       <ul v-else class="register-view__list">
         <li v-for="account in accounts" :key="account.id" class="register-view__item">
-          <span>{{ account.institution_name }}</span>
-          <span>{{ account.balance.toLocaleString() }} 円</span>
+          <template v-if="editingAccountId === account.id">
+            <div class="register-view__edit-row">
+              <input v-model="editAccountName" type="text" class="register-view__edit-input" />
+              <input v-model.number="editAccountBalance" type="number" min="0" step="1" class="register-view__edit-input" />
+              <div class="register-view__item-actions">
+                <button @click="saveEditAccount(account.id)">保存</button>
+                <button class="register-view__close" @click="cancelEditAccount">取消</button>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <span>{{ account.institution_name }}</span>
+            <div class="register-view__item-actions">
+              <span>{{ account.balance.toLocaleString() }} 円</span>
+              <button @click="startEditAccount(account)">編集</button>
+              <button style="background: #dc2626;" @click="removeAccount(account.id)">削除</button>
+            </div>
+          </template>
         </li>
       </ul>
     </section>
@@ -138,7 +226,22 @@ async function handleAddCard() {
       <p v-if="creditCards.length === 0" class="register-view__empty">まだカードが登録されていません</p>
       <ul v-else class="register-view__list">
         <li v-for="card in creditCards" :key="card.id" class="register-view__item">
-          <span>{{ card.card_name }}</span>
+          <template v-if="editingCardId === card.id">
+            <div class="register-view__edit-row">
+              <input v-model="editCardName" type="text" class="register-view__edit-input" />
+              <div class="register-view__item-actions">
+                <button @click="saveEditCard(card.id)">保存</button>
+                <button class="register-view__close" @click="cancelEditCard">取消</button>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <span>{{ card.card_name }}</span>
+            <div class="register-view__item-actions">
+              <button @click="startEditCard(card)">編集</button>
+              <button style="background: #dc2626;" @click="removeCard(card.id)">削除</button>
+            </div>
+          </template>
         </li>
       </ul>
     </section>
@@ -277,6 +380,24 @@ async function handleAddCard() {
   border-radius: 10px;
   background: #f9fafb;
   font-weight: 600;
+}
+
+.register-view__item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.register-view__edit-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.register-view__edit-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .register-view__modal-overlay {

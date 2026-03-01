@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useHousehold } from '@/composables/useHousehold'
 import { useCategories } from '@/composables/useCategories'
+import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
+import { useSavingsGoal } from '@/composables/useSavingsGoal'
 
 const { currentHouseholdId } = useHousehold()
 const { categories, createCategory, updateCategory, deleteCategory } = useCategories(
   () => currentHouseholdId.value,
 )
+const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
+const goal = useSavingsGoal(() => currentHouseholdId.value, () => totalAssets.value)
 
 const incomeCategories = computed(() =>
   categories.value.filter((c) => c.kind === 'income'),
@@ -31,12 +35,41 @@ const editColor = ref('#3b82f6')
 
 const savedMessage = ref('')
 const errorMessage = ref('')
+const goalSavedMessage = ref('')
+const goalErrorMessage = ref('')
+const targetAmountInput = ref(0)
+const targetYearInput = ref(new Date().getFullYear() + 3)
 
 function flashSaved(message: string) {
   savedMessage.value = message
   setTimeout(() => {
     savedMessage.value = ''
   }, 1500)
+}
+
+function syncGoalInputs() {
+  targetAmountInput.value = goal.targetAmount.value
+  targetYearInput.value = goal.targetYear.value
+}
+syncGoalInputs()
+watch([goal.targetAmount, goal.targetYear], () => {
+  syncGoalInputs()
+})
+
+async function saveGoalSettings() {
+  goalErrorMessage.value = ''
+  goalSavedMessage.value = ''
+
+  try {
+    await goal.setTarget(Number(targetAmountInput.value) || 0)
+    await goal.setTargetYear(Number(targetYearInput.value) || new Date().getFullYear())
+    goalSavedMessage.value = '目標設定を保存しました'
+    setTimeout(() => {
+      goalSavedMessage.value = ''
+    }, 1500)
+  } catch (error) {
+    goalErrorMessage.value = error instanceof Error ? error.message : '目標設定の保存に失敗しました'
+  }
 }
 
 async function addIncomeCategory() {
@@ -131,6 +164,25 @@ async function removeCategory(id: string) {
 
 <template>
   <main class="settings-view">
+    <section class="card">
+      <h1 style="margin-top: 0;">目標設定</h1>
+      <p style="margin-top: 0; color: #6b7280;">目標金額と目標期日（年）を設定します。</p>
+
+      <div class="row" style="align-items: end;">
+        <label style="display: flex; flex-direction: column; gap: 0.35rem; min-width: 180px;">
+          <span style="font-weight: 600;">目標金額</span>
+          <input v-model.number="targetAmountInput" type="number" min="0" step="10000" />
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 0.35rem; min-width: 140px;">
+          <span style="font-weight: 600;">目標期日（年）</span>
+          <input v-model.number="targetYearInput" type="number" min="2025" max="2100" step="1" />
+        </label>
+        <button style="max-width: 180px;" @click="saveGoalSettings">目標を保存</button>
+      </div>
+      <p v-if="goalSavedMessage" class="settings-view__saved">{{ goalSavedMessage }}</p>
+      <p v-if="goalErrorMessage" class="settings-view__error">{{ goalErrorMessage }}</p>
+    </section>
+
     <section class="card">
       <h1 style="margin-top: 0;">登録カテゴリ</h1>
       <p style="margin-top: 0; color: #6b7280;">収入カテゴリ・支出カテゴリを管理できます。</p>

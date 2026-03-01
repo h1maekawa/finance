@@ -59,6 +59,41 @@ export function useCreditCards(householdId: () => string | null) {
     creditCards.value.push(data as CreditCard)
   }
 
+  async function updateCreditCard(id: string, patch: Partial<Pick<CreditCard, 'card_name' | 'is_active'>>) {
+    const hid = householdId()
+    if (!hid) throw new Error('No household selected')
+
+    const update: Record<string, unknown> = {}
+    if (patch.card_name !== undefined) update.card_name = patch.card_name.trim()
+    if (patch.is_active !== undefined) update.is_active = patch.is_active
+
+    const { error } = await supabase
+      .from('credit_cards')
+      .update(update)
+      .eq('id', id)
+      .eq('household_id', hid)
+    if (error) throw error
+
+    const idx = creditCards.value.findIndex((c) => c.id === id)
+    if (idx !== -1) {
+      creditCards.value[idx] = { ...creditCards.value[idx], ...update } as CreditCard
+    }
+  }
+
+  async function deleteCreditCard(id: string) {
+    const hid = householdId()
+    if (!hid) throw new Error('No household selected')
+
+    const { error } = await supabase
+      .from('credit_cards')
+      .delete()
+      .eq('id', id)
+      .eq('household_id', hid)
+    if (error) throw error
+
+    creditCards.value = creditCards.value.filter((c) => c.id !== id)
+  }
+
   watch(() => householdId(), () => void fetchCreditCards(), { immediate: true })
 
   return {
@@ -67,5 +102,7 @@ export function useCreditCards(householdId: () => string | null) {
     loading,
     fetchCreditCards,
     addCreditCard,
+    updateCreditCard,
+    deleteCreditCard,
   }
 }
