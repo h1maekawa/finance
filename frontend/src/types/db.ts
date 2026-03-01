@@ -81,6 +81,7 @@ export type Stock = {
   user_id: string
   symbol: string
   account_type: string
+  securities_account_id: string | null
   shares: number
   average_price: number
   current_price: number
@@ -88,6 +89,16 @@ export type Stock = {
   profit_loss: number
   profit_loss_rate: number
   updated_at: string
+}
+
+export type SecuritiesAccount = {
+  id: string
+  household_id: string
+  broker_name: string
+  account_name: string
+  tax_category: 'nisa_growth' | 'nisa_tsumitate' | 'specified' | 'general'
+  is_active: boolean
+  sort_order: number
 }
 
 export type MonthlySnapshot = {

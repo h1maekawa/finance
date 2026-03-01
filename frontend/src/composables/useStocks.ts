@@ -5,7 +5,8 @@ import type { Stock } from '@/types/db'
 
 type StockInput = {
   symbol: string
-  account_type: string
+  account_type?: string
+  securities_account_id?: string | null
   shares: number
   average_price: number
 }
@@ -35,6 +36,7 @@ export function useStocks() {
         user_id,
         symbol,
         account_type,
+        securities_account_id,
         shares,
         average_price,
         current_price,
@@ -58,7 +60,8 @@ export function useStocks() {
     const payload = {
       user_id: userId,
       symbol: input.symbol.trim().toUpperCase(),
-      account_type: input.account_type.trim(),
+      account_type: input.account_type?.trim() || '未設定',
+      securities_account_id: input.securities_account_id ?? null,
       shares: Math.max(0, Number(input.shares || 0)),
       average_price: Math.max(0, Number(input.average_price || 0)),
       current_price: 0,

@@ -3,23 +3,39 @@ import { computed, ref } from 'vue'
 import { useAccounts } from '@/composables/useAccounts'
 import { useHousehold } from '@/composables/useHousehold'
 import { useCreditCards } from '@/composables/useCreditCards'
+import { useSecuritiesAccounts } from '@/composables/useSecuritiesAccounts'
 
 const { currentHouseholdId } = useHousehold()
 const { accounts, addAccount, updateAccount, deleteAccount } = useAccounts(() => currentHouseholdId.value)
 const { creditCards, addCreditCard, updateCreditCard, deleteCreditCard } = useCreditCards(() => currentHouseholdId.value)
+const {
+  securitiesAccounts,
+  addSecuritiesAccount,
+  updateSecuritiesAccount,
+  deleteSecuritiesAccount,
+} = useSecuritiesAccounts(() => currentHouseholdId.value)
 
 const showAddModal = ref(false)
 const showCardModal = ref(false)
+const showSecuritiesModal = ref(false)
 const newName = ref('')
 const newBalance = ref<number | undefined>(undefined)
 const cardNameInput = ref('')
+const securitiesBrokerInput = ref('')
+const securitiesAccountNameInput = ref('')
+const securitiesTaxCategoryInput = ref<'nisa_growth' | 'nisa_tsumitate' | 'specified' | 'general'>('specified')
 const editingAccountId = ref<string | null>(null)
 const editAccountName = ref('')
 const editAccountBalance = ref<number>(0)
 const editingCardId = ref<string | null>(null)
 const editCardName = ref('')
+const editingSecuritiesId = ref<string | null>(null)
+const editSecuritiesBroker = ref('')
+const editSecuritiesName = ref('')
+const editSecuritiesTax = ref<'nisa_growth' | 'nisa_tsumitate' | 'specified' | 'general'>('specified')
 const errorMessage = ref('')
 const cardErrorMessage = ref('')
+const securitiesErrorMessage = ref('')
 
 const bankNameCandidates = [
   '三井住友銀行',
@@ -53,6 +69,17 @@ const cardNameCandidates = [
   'アメリカン・エキスプレス・グリーン',
 ]
 
+const securitiesBrokerCandidates = [
+  '楽天証券',
+  'SBI証券',
+  'マネックス証券',
+  '松井証券',
+  'auカブコム証券',
+  '野村證券',
+  'SMBC日興証券',
+  '大和証券',
+]
+
 const filteredBankCandidates = computed(() => {
   const keyword = newName.value.trim().toLowerCase()
   if (!keyword) return bankNameCandidates.slice(0, 6)
@@ -75,6 +102,18 @@ const filteredCardCandidates = computed(() => {
 
 function selectCardCandidate(name: string) {
   cardNameInput.value = name
+}
+
+const filteredSecuritiesBrokerCandidates = computed(() => {
+  const keyword = securitiesBrokerInput.value.trim().toLowerCase()
+  if (!keyword) return securitiesBrokerCandidates.slice(0, 6)
+  return securitiesBrokerCandidates
+    .filter((name) => name.toLowerCase().includes(keyword))
+    .slice(0, 6)
+})
+
+function selectSecuritiesBrokerCandidate(name: string) {
+  securitiesBrokerInput.value = name
 }
 
 async function handleAdd() {
@@ -179,6 +218,75 @@ async function removeCard(id: string) {
     cardErrorMessage.value = error instanceof Error ? error.message : 'カード削除に失敗しました。'
   }
 }
+
+const taxCategoryLabel: Record<'nisa_growth' | 'nisa_tsumitate' | 'specified' | 'general', string> = {
+  nisa_growth: 'NISA 成長投資枠',
+  nisa_tsumitate: 'NISA つみたて投資枠',
+  specified: '特定口座',
+  general: '一般口座',
+}
+
+async function handleAddSecuritiesAccount() {
+  securitiesErrorMessage.value = ''
+  if (!securitiesBrokerInput.value.trim()) {
+    securitiesErrorMessage.value = '証券会社名を入力してください。'
+    return
+  }
+  if (!securitiesAccountNameInput.value.trim()) {
+    securitiesErrorMessage.value = '口座名を入力してください。'
+    return
+  }
+
+  try {
+    await addSecuritiesAccount({
+      broker_name: securitiesBrokerInput.value,
+      account_name: securitiesAccountNameInput.value,
+      tax_category: securitiesTaxCategoryInput.value,
+      is_active: true,
+    })
+    securitiesBrokerInput.value = ''
+    securitiesAccountNameInput.value = ''
+    securitiesTaxCategoryInput.value = 'specified'
+    showSecuritiesModal.value = false
+  } catch (error) {
+    securitiesErrorMessage.value = error instanceof Error ? error.message : '証券口座登録に失敗しました。'
+  }
+}
+
+function startEditSecuritiesAccount(row: { id: string; broker_name: string; account_name: string; tax_category: 'nisa_growth' | 'nisa_tsumitate' | 'specified' | 'general' }) {
+  editingSecuritiesId.value = row.id
+  editSecuritiesBroker.value = row.broker_name
+  editSecuritiesName.value = row.account_name
+  editSecuritiesTax.value = row.tax_category
+}
+
+function cancelEditSecuritiesAccount() {
+  editingSecuritiesId.value = null
+}
+
+async function saveEditSecuritiesAccount(id: string) {
+  securitiesErrorMessage.value = ''
+  try {
+    await updateSecuritiesAccount(id, {
+      broker_name: editSecuritiesBroker.value,
+      account_name: editSecuritiesName.value,
+      tax_category: editSecuritiesTax.value,
+    })
+    editingSecuritiesId.value = null
+  } catch (error) {
+    securitiesErrorMessage.value = error instanceof Error ? error.message : '証券口座更新に失敗しました。'
+  }
+}
+
+async function removeSecuritiesAccount(id: string) {
+  securitiesErrorMessage.value = ''
+  if (!confirm('この証券口座を削除しますか？')) return
+  try {
+    await deleteSecuritiesAccount(id)
+  } catch (error) {
+    securitiesErrorMessage.value = error instanceof Error ? error.message : '証券口座削除に失敗しました。'
+  }
+}
 </script>
 
 <template>
@@ -189,9 +297,11 @@ async function removeCard(id: string) {
       <div class="register-view__hero-actions">
         <button type="button" class="register-view__btn" @click="showAddModal = true">口座を登録</button>
         <button type="button" class="register-view__btn" @click="showCardModal = true">カードを登録</button>
+        <button type="button" class="register-view__btn" @click="showSecuritiesModal = true">証券口座を登録</button>
       </div>
       <p v-if="errorMessage" class="register-view__error">{{ errorMessage }}</p>
       <p v-if="cardErrorMessage" class="register-view__error">{{ cardErrorMessage }}</p>
+      <p v-if="securitiesErrorMessage" class="register-view__error">{{ securitiesErrorMessage }}</p>
     </section>
 
     <section class="card">
@@ -240,6 +350,38 @@ async function removeCard(id: string) {
             <div class="register-view__item-actions">
               <button @click="startEditCard(card)">編集</button>
               <button style="background: #dc2626;" @click="removeCard(card.id)">削除</button>
+            </div>
+          </template>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h3 class="register-view__sub-title">登録済み証券口座</h3>
+      <p v-if="securitiesAccounts.length === 0" class="register-view__empty">まだ証券口座が登録されていません</p>
+      <ul v-else class="register-view__list">
+        <li v-for="row in securitiesAccounts" :key="row.id" class="register-view__item">
+          <template v-if="editingSecuritiesId === row.id">
+            <div class="register-view__edit-row">
+              <input v-model="editSecuritiesBroker" type="text" class="register-view__edit-input" />
+              <input v-model="editSecuritiesName" type="text" class="register-view__edit-input" />
+              <select v-model="editSecuritiesTax" class="register-view__edit-input">
+                <option value="nisa_growth">NISA 成長投資枠</option>
+                <option value="nisa_tsumitate">NISA つみたて投資枠</option>
+                <option value="specified">特定口座</option>
+                <option value="general">一般口座</option>
+              </select>
+              <div class="register-view__item-actions">
+                <button @click="saveEditSecuritiesAccount(row.id)">保存</button>
+                <button class="register-view__close" @click="cancelEditSecuritiesAccount">取消</button>
+              </div>
+            </div>
+          </template>
+          <template v-else>
+            <span>{{ row.broker_name }} / {{ row.account_name }} / {{ taxCategoryLabel[row.tax_category] }}</span>
+            <div class="register-view__item-actions">
+              <button @click="startEditSecuritiesAccount(row)">編集</button>
+              <button style="background: #dc2626;" @click="removeSecuritiesAccount(row.id)">削除</button>
             </div>
           </template>
         </li>
@@ -304,6 +446,46 @@ async function removeCard(id: string) {
           <div class="register-view__actions">
             <button type="submit">登録する</button>
             <button type="button" class="register-view__close" @click="showCardModal = false">閉じる</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div v-if="showSecuritiesModal" class="register-view__modal-overlay" @click.self="showSecuritiesModal = false">
+      <section class="register-view__modal card">
+        <h3 class="register-view__sub-title">証券口座を追加</h3>
+        <form class="register-view__form" @submit.prevent="handleAddSecuritiesAccount">
+          <input
+            v-model="securitiesBrokerInput"
+            type="text"
+            placeholder="証券会社（例：楽天証券）"
+            required
+          />
+          <ul v-if="filteredSecuritiesBrokerCandidates.length > 0" class="register-view__suggestions">
+            <li
+              v-for="candidate in filteredSecuritiesBrokerCandidates"
+              :key="candidate"
+              class="register-view__suggestion-item"
+              @click="selectSecuritiesBrokerCandidate(candidate)"
+            >
+              {{ candidate }}
+            </li>
+          </ul>
+          <input
+            v-model="securitiesAccountNameInput"
+            type="text"
+            placeholder="口座名（例：メイン口座）"
+            required
+          />
+          <select v-model="securitiesTaxCategoryInput">
+            <option value="nisa_growth">NISA 成長投資枠</option>
+            <option value="nisa_tsumitate">NISA つみたて投資枠</option>
+            <option value="specified">特定口座</option>
+            <option value="general">一般口座</option>
+          </select>
+          <div class="register-view__actions">
+            <button type="submit">登録する</button>
+            <button type="button" class="register-view__close" @click="showSecuritiesModal = false">閉じる</button>
           </div>
         </form>
       </section>

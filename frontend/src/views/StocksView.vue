@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useStocks } from '@/composables/useStocks'
+import { useHousehold } from '@/composables/useHousehold'
+import { useSecuritiesAccounts } from '@/composables/useSecuritiesAccounts'
 
 const {
   stocks,
@@ -13,10 +15,12 @@ const {
   deleteStock,
   updatePrices,
 } = useStocks()
+const { currentHouseholdId } = useHousehold()
+const { activeSecuritiesAccounts } = useSecuritiesAccounts(() => currentHouseholdId.value)
 
 const formError = ref('')
 const symbolInput = ref('')
-const accountTypeInput = ref('特定口座')
+const securitiesAccountIdInput = ref('')
 const sharesInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
@@ -56,6 +60,7 @@ const tableRows = computed(() =>
     tradeLabel: '現物',
     symbol: stock.symbol,
     accountType: stock.account_type,
+    securitiesAccountId: stock.securities_account_id,
     shares: Number(stock.shares ?? 0),
     averagePrice: Number(stock.average_price ?? 0),
     currentPrice: Number(stock.current_price ?? 0),
@@ -64,6 +69,20 @@ const tableRows = computed(() =>
     profitLossRate: Number(stock.profit_loss_rate ?? 0),
   })),
 )
+
+const taxCategoryLabel: Record<string, string> = {
+  nisa_growth: 'NISA 成長投資枠',
+  nisa_tsumitate: 'NISA つみたて投資枠',
+  specified: '特定口座',
+  general: '一般口座',
+}
+
+function resolveAccountLabel(row: { accountType: string; securitiesAccountId: string | null }) {
+  if (!row.securitiesAccountId) return row.accountType
+  const account = activeSecuritiesAccounts.value.find((v) => v.id === row.securitiesAccountId)
+  if (!account) return row.accountType
+  return `${account.broker_name} / ${taxCategoryLabel[account.tax_category] ?? account.tax_category}`
+}
 
 const totalProfitLoss = computed(() =>
   tableRows.value.reduce((sum, row) => sum + row.profitLoss, 0),
@@ -97,14 +116,18 @@ async function handleAddStock() {
   }
 
   try {
+    const selectedAccount = activeSecuritiesAccounts.value.find((v) => v.id === securitiesAccountIdInput.value)
     await addStock({
       symbol: symbolInput.value,
-      account_type: accountTypeInput.value || '特定口座',
+      account_type: selectedAccount
+        ? `${selectedAccount.broker_name} / ${taxCategoryLabel[selectedAccount.tax_category] ?? selectedAccount.tax_category}`
+        : '未設定',
+      securities_account_id: selectedAccount?.id ?? null,
       shares: sharesInput.value ?? 0,
       average_price: averagePriceInput.value ?? 0,
     })
     symbolInput.value = ''
-    accountTypeInput.value = '特定口座'
+    securitiesAccountIdInput.value = ''
     sharesInput.value = undefined
     averagePriceInput.value = undefined
     showAddModal.value = false
@@ -172,7 +195,12 @@ onMounted(() => {
               {{ candidate.symbol }} / {{ candidate.name }}
             </li>
           </ul>
-          <input v-model="accountTypeInput" type="text" placeholder="口座区分（例: 特定口座）" required />
+          <select v-model="securitiesAccountIdInput" required>
+            <option value="">証券口座を選択（NISA/特定）</option>
+            <option v-for="acc in activeSecuritiesAccounts" :key="acc.id" :value="acc.id">
+              {{ acc.broker_name }} / {{ taxCategoryLabel[acc.tax_category] }}
+            </option>
+          </select>
           <input v-model.number="sharesInput" type="number" step="0.0001" min="0" placeholder="保有数量" required />
           <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
           <div style="display: flex; gap: 0.5rem;">
@@ -207,7 +235,7 @@ onMounted(() => {
           <tr v-for="row in tableRows" :key="row.id">
             <td>{{ row.tradeLabel }}</td>
             <td>{{ row.symbol }}</td>
-            <td>{{ row.accountType }}</td>
+            <td>{{ resolveAccountLabel(row) }}</td>
             <td>{{ formatNumber(row.shares, 4) }}</td>
             <td>{{ formatNumber(row.averagePrice, 2) }}</td>
             <td>{{ formatNumber(row.currentPrice, 2) }}</td>
