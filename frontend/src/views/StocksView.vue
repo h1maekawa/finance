@@ -35,6 +35,7 @@ const averagePriceInput = ref<number | undefined>(undefined)
 const currentPriceInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
 const fundPriceInputs = ref<Record<string, number>>({})
+const expandedRows = ref<Record<string, boolean>>({})
 
 let autoTimer: number | null = null
 
@@ -112,6 +113,14 @@ function profitClass(value: number) {
   if (value > 0) return 'stocks-view__profit--plus'
   if (value < 0) return 'stocks-view__profit--minus'
   return ''
+}
+
+function toggleDetail(id: string) {
+  expandedRows.value[id] = !expandedRows.value[id]
+}
+
+function isDetailOpen(id: string) {
+  return Boolean(expandedRows.value[id])
 }
 
 function syncFundPriceInputs() {
@@ -334,74 +343,82 @@ watch(
       <h3 style="margin-top: 0;">株式</h3>
       <p v-if="loading">読み込み中...</p>
       <p v-else-if="stockRows.length === 0">株式はありません。</p>
-
-      <table v-else class="stocks-view__table">
-        <thead>
-          <tr>
-            <th>銘柄名</th>
-            <th>口座区分</th>
-            <th>保有数量</th>
-            <th>平均取得価額</th>
-            <th>現在価格</th>
-            <th>評価額</th>
-            <th>評価損益</th>
-            <th>評価損益率</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in stockRows" :key="row.id">
-            <td>{{ row.name }}</td>
-            <td>{{ row.account_type }}</td>
-            <td>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</td>
-            <td>{{ formatNumber(Number(row.average_price), 2) }}</td>
-            <td>
-              <div class="stocks-view__fund-price-cell">
-                <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
-                <button @click="handleSaveFundPrice(row.id)">保存</button>
-              </div>
-            </td>
-            <td>{{ formatNumber(Number(row.evaluation_amount), 0) }}</td>
-            <td :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}</td>
-            <td :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</td>
-            <td><button @click="handleDelete(row.id)">削除</button></td>
-          </tr>
-        </tbody>
-      </table>
+      <ul v-else class="stocks-view__item-list">
+        <li v-for="row in stockRows" :key="row.id" class="stocks-view__item card">
+          <div class="stocks-view__item-top">
+            <div>
+              <p class="stocks-view__item-name">{{ row.name }}</p>
+              <p class="stocks-view__item-sub">{{ row.symbol }}</p>
+            </div>
+            <button type="button" @click="toggleDetail(row.id)">
+              {{ isDetailOpen(row.id) ? '閉じる' : '詳細' }}
+            </button>
+          </div>
+          <div class="stocks-view__item-main">
+            <div>
+              <p class="stocks-view__metric-label">現在価格</p>
+              <p class="stocks-view__metric-value">{{ formatNumber(Number(row.current_price), 2) }}</p>
+            </div>
+            <div>
+              <p class="stocks-view__metric-label">評価損益率</p>
+              <p class="stocks-view__metric-value" :class="profitClass(Number(row.profit_loss_rate))">
+                {{ formatNumber(Number(row.profit_loss_rate), 2) }}%
+              </p>
+            </div>
+          </div>
+          <div v-if="isDetailOpen(row.id)" class="stocks-view__detail">
+            <p>口座区分: {{ row.account_type }}</p>
+            <p>保有数量: {{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
+            <p>平均取得価額: {{ formatNumber(Number(row.average_price), 2) }}</p>
+            <p>評価額: {{ formatNumber(Number(row.evaluation_amount), 0) }}</p>
+            <p :class="profitClass(Number(row.profit_loss))">評価損益: {{ formatNumber(Number(row.profit_loss), 0) }}</p>
+            <button type="button" class="stocks-view__danger-btn" @click="handleDelete(row.id)">削除</button>
+          </div>
+        </li>
+      </ul>
     </section>
 
     <section class="card stocks-view__table-wrap">
       <h3 style="margin-top: 0;">投資信託</h3>
       <p v-if="loading">読み込み中...</p>
       <p v-else-if="fundRows.length === 0">投資信託はありません。</p>
-      <table v-else class="stocks-view__table">
-        <thead>
-          <tr>
-            <th>銘柄名</th>
-            <th>口座区分</th>
-            <th>保有数量</th>
-            <th>平均取得価額</th>
-            <th>現在価格</th>
-            <th>評価額</th>
-            <th>評価損益</th>
-            <th>評価損益率</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in fundRows" :key="row.id">
-            <td>{{ row.name }}</td>
-            <td>{{ row.account_type }}</td>
-            <td>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</td>
-            <td>{{ formatNumber(Number(row.average_price), 2) }}</td>
-            <td>{{ formatNumber(Number(row.current_price), 2) }}</td>
-            <td>{{ formatNumber(Number(row.evaluation_amount), 0) }}</td>
-            <td :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}</td>
-            <td :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</td>
-            <td><button @click="handleDelete(row.id)">削除</button></td>
-          </tr>
-        </tbody>
-      </table>
+      <ul v-else class="stocks-view__item-list">
+        <li v-for="row in fundRows" :key="row.id" class="stocks-view__item card">
+          <div class="stocks-view__item-top">
+            <div>
+              <p class="stocks-view__item-name">{{ row.name }}</p>
+              <p class="stocks-view__item-sub">{{ row.symbol }}</p>
+            </div>
+            <button type="button" @click="toggleDetail(row.id)">
+              {{ isDetailOpen(row.id) ? '閉じる' : '詳細' }}
+            </button>
+          </div>
+          <div class="stocks-view__item-main">
+            <div>
+              <p class="stocks-view__metric-label">現在価格</p>
+              <div class="stocks-view__fund-price-cell">
+                <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
+                <button type="button" @click="handleSaveFundPrice(row.id)">保存</button>
+              </div>
+            </div>
+            <div>
+              <p class="stocks-view__metric-label">評価損益率</p>
+              <p class="stocks-view__metric-value" :class="profitClass(Number(row.profit_loss_rate))">
+                {{ formatNumber(Number(row.profit_loss_rate), 2) }}%
+              </p>
+            </div>
+          </div>
+          <div v-if="isDetailOpen(row.id)" class="stocks-view__detail">
+            <p>口座区分: {{ row.account_type }}</p>
+            <p>保有数量: {{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
+            <p>平均取得価額: {{ formatNumber(Number(row.average_price), 2) }}</p>
+            <p>現在価格: {{ formatNumber(Number(row.current_price), 2) }}</p>
+            <p>評価額: {{ formatNumber(Number(row.evaluation_amount), 0) }}</p>
+            <p :class="profitClass(Number(row.profit_loss))">評価損益: {{ formatNumber(Number(row.profit_loss), 0) }}</p>
+            <button type="button" class="stocks-view__danger-btn" @click="handleDelete(row.id)">削除</button>
+          </div>
+        </li>
+      </ul>
     </section>
   </main>
 </template>
@@ -500,7 +517,7 @@ watch(
 }
 
 .stocks-view__table-wrap {
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 .stocks-view__sheet-head {
@@ -519,7 +536,7 @@ watch(
 .stocks-view__table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 980px;
+  min-width: 0;
 }
 
 .stocks-view__table th,
@@ -533,9 +550,7 @@ watch(
 .stocks-view__table th:nth-child(1),
 .stocks-view__table td:nth-child(1),
 .stocks-view__table th:nth-child(2),
-.stocks-view__table td:nth-child(2),
-.stocks-view__table th:nth-child(9),
-.stocks-view__table td:nth-child(9) {
+.stocks-view__table td:nth-child(2) {
   text-align: left;
 }
 
@@ -552,11 +567,81 @@ watch(
 .stocks-view__fund-price-cell {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 0.35rem;
 }
 
 .stocks-view__fund-price-cell input {
   width: 120px;
+}
+
+.stocks-view__item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.stocks-view__item {
+  border: 1px solid #e5e7eb;
+}
+
+.stocks-view__item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.stocks-view__item-name {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.stocks-view__item-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.stocks-view__item-main {
+  margin-top: 0.75rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.stocks-view__metric-label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.stocks-view__metric-value {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.stocks-view__detail {
+  margin-top: 0.8rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stocks-view__detail p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.stocks-view__danger-btn {
+  width: fit-content;
+  margin-top: 0.35rem;
+  background: #dc2626;
 }
 </style>

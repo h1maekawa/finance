@@ -60,8 +60,8 @@ npm run dev
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Sender ID | 同上 |
 | `VITE_FIREBASE_APP_ID` | Firebase App ID | 同上 |
 | `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics ID | 同上（任意） |
-| `VITE_GAS_WEBAPP_URL` | GAS Web App URL | Apps Script デプロイ画面 |
-| `VITE_GAS_SECRET` | GAS共有シークレット | 自分で作成 |
+| `GAS_WEBAPP_URL` | GAS Web App URL | Apps Script デプロイ画面 |
+| `GAS_SECRET` | GAS共有シークレット | 自分で作成 |
 
 ## DB 設計概要
 
@@ -116,8 +116,8 @@ Vercel の **Settings → Environment Variables** に `.env` と同じキー・�
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `858089882597` |
 | `VITE_FIREBASE_APP_ID` | Firebase の App ID |
 | `VITE_FIREBASE_MEASUREMENT_ID` | `G-YME6HPE7CT` |
-| `VITE_GAS_WEBAPP_URL` | Apps Script の Web App URL |
-| `VITE_GAS_SECRET` | GAS 側の `APP_SECRET` と同値 |
+| `GAS_WEBAPP_URL` | Apps Script の Web App URL |
+| `GAS_SECRET` | GAS 側の `APP_SECRET` と同値 |
 
 ### 3. Firebase に Vercel ドメインを追加
 
@@ -137,7 +137,7 @@ your-custom-domain.com        ← カスタムドメインを使う場合
 
 ### 5. Google Sheets 連携（Google Apps Script）
 
-フロントは `VITE_GAS_WEBAPP_URL` を直接呼び出し、
+フロントは同一オリジンの `/api/gas/*` を呼び出し、
 銘柄追加時に `USER_ENTERED` 相当の数式をシートへ反映する。
 
 - 追加時: `symbol / name / quantity / uid / secret` を GAS へ送信
