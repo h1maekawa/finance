@@ -4,8 +4,14 @@ export type SheetInvestmentRow = {
   symbol: string
   name: string
   quantity: number
-  currentPrice: number
-  evaluationAmount: number
+  currentPrice?: number
+  currentPriceUsd?: number
+  currentPriceYen?: number
+  previousDiff?: number
+  previousDiffRate?: number
+  evaluationAmount?: number
+  profitLoss?: number
+  profitLossRate?: number
 }
 
 type AppendPayload = {

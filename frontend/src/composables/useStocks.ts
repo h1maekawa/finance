@@ -224,21 +224,39 @@ export function useStocks() {
           continue
         }
 
-        const currentPrice = Number(matched.currentPrice ?? 0)
-        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+        const quantity = Number(stock.quantity ?? 0)
+        const averagePrice = Number(stock.average_price ?? 0)
+        const fx = Math.max(1, Number(usdJpyRate || 0))
+
+        const sheetCurrentPriceUsd = Number(matched.currentPriceUsd ?? 0)
+        const sheetCurrentPriceYen = Number(matched.currentPriceYen ?? 0)
+        const sheetCurrentPrice = Number(matched.currentPrice ?? 0)
+        let currentPrice = 0
+        if (Number.isFinite(sheetCurrentPriceUsd) && sheetCurrentPriceUsd > 0) {
+          currentPrice = sheetCurrentPriceUsd
+        } else if (Number.isFinite(sheetCurrentPriceYen) && sheetCurrentPriceYen > 0) {
+          currentPrice = sheetCurrentPriceYen / fx
+        } else if (Number.isFinite(sheetCurrentPrice) && sheetCurrentPrice > 0) {
+          // スプシ側が円の現在値を返すケースを許容
+          currentPrice = sheetCurrentPrice > 1000 ? sheetCurrentPrice / fx : sheetCurrentPrice
+        } else {
           updateErrors.value.push(`${stock.symbol}: 現在価格が不正です`)
           continue
         }
 
-        const quantity = Number(stock.quantity ?? 0)
-        const averagePrice = Number(stock.average_price ?? 0)
-        const fx = Math.max(1, Number(usdJpyRate || 0))
-        const evaluationAmount = currentPrice * fx * quantity
+        const sheetEvaluationAmount = Number(matched.evaluationAmount ?? 0)
+        const evaluationAmount = Number.isFinite(sheetEvaluationAmount) && sheetEvaluationAmount > 0
+          ? sheetEvaluationAmount
+          : currentPrice * fx * quantity
         const costAmount = averagePrice * quantity
-        const profitLossYen = evaluationAmount - costAmount
-        const profitLossRate = costAmount > 0
-          ? (profitLossYen / costAmount) * 100
-          : 0
+        const sheetProfitLoss = Number(matched.profitLoss ?? NaN)
+        const sheetProfitLossRate = Number(matched.profitLossRate ?? NaN)
+        const profitLossYen = Number.isFinite(sheetProfitLoss)
+          ? sheetProfitLoss
+          : evaluationAmount - costAmount
+        const profitLossRate = Number.isFinite(sheetProfitLossRate)
+          ? sheetProfitLossRate
+          : (costAmount > 0 ? (profitLossYen / costAmount) * 100 : 0)
 
         const { error } = await supabase
           .from('investments')
