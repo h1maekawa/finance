@@ -6,7 +6,8 @@ import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
 import { useMonthlySummary } from '@/composables/useMonthlySummary'
 import { useCreditCards } from '@/composables/useCreditCards'
-import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
+import { useAccounts } from '@/composables/useAccounts'
+import { useStocks } from '@/composables/useStocks'
 import { useMonthlySnapshots } from '@/composables/useMonthlySnapshots'
 import { sessionStore } from '@/stores/session'
 import type { TransactionKind } from '@/types/db'
@@ -14,7 +15,8 @@ import type { TransactionKind } from '@/types/db'
 const { currentHouseholdId } = useHousehold()
 const { categories, incomeCategories, expenseCategories } = useCategories(() => currentHouseholdId.value)
 const { activeCards } = useCreditCards(() => currentHouseholdId.value)
-const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
+const { totalBalance } = useAccounts(() => currentHouseholdId.value)
+const { totalEvaluationAmount } = useStocks()
 const { snapshots, saveSnapshot } = useMonthlySnapshots(() => currentHouseholdId.value)
 const {
   transactions,
@@ -30,6 +32,7 @@ const summary = useMonthlySummary(
 )
 
 const netTotal = computed(() => totalIncome.value - totalExpense.value)
+const monthEndAssets = computed(() => totalBalance.value + totalEvaluationAmount.value)
 const snapshotSavedMessage = ref('')
 const snapshotErrorMessage = ref('')
 
@@ -114,7 +117,7 @@ async function saveMonthlySnapshot() {
       income_total: totalIncome.value,
       expense_total: totalExpense.value,
       net_total: netTotal.value,
-      month_end_assets: totalAssets.value,
+      month_end_assets: monthEndAssets.value,
     })
     snapshotSavedMessage.value = '月次データを保存しました。'
     setTimeout(() => {
@@ -157,7 +160,7 @@ async function saveMonthlySnapshot() {
       </article>
       <article class="cashflow-view__summary-card">
         <h2 class="cashflow-view__summary-label">月末資産額（記録用）</h2>
-        <p class="cashflow-view__summary-value">{{ totalAssets.toLocaleString() }}円</p>
+        <p class="cashflow-view__summary-value">{{ monthEndAssets.toLocaleString() }}円</p>
       </article>
     </section>
 

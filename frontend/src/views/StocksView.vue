@@ -38,6 +38,12 @@ const stockCandidates = [
   { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
   { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF' },
   { symbol: 'VOO', name: 'Vanguard S&P 500 ETF' },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust' },
+  { symbol: 'VT', name: 'Vanguard Total World Stock ETF' },
+  { symbol: '楽天・全米株式インデックス・ファンド(楽天・VTI)', name: '投資信託' },
+  { symbol: 'eMAXIS Slim 先進国株式インデックス(除く日本)', name: '投資信託' },
+  { symbol: 'eMAXIS Slim 全世界株式(オール・カントリー)', name: '投資信託' },
+  { symbol: '楽天・オールカントリー株式インデックス・ファンド', name: '投資信託' },
 ]
 
 const filteredStockCandidates = computed(() => {
@@ -184,7 +190,7 @@ onMounted(() => {
       <section class="stocks-view__modal card">
         <h3 style="margin-top: 0;">銘柄追加</h3>
         <form class="stocks-view__form" @submit.prevent="handleAddStock">
-          <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: AAPL）" required />
+          <input v-model="symbolInput" type="text" placeholder="銘柄コード/銘柄名（例: AAPL, 楽天・全米株式インデックス・ファンド）" required />
           <ul v-if="filteredStockCandidates.length > 0" class="stocks-view__suggestions">
             <li
               v-for="candidate in filteredStockCandidates"

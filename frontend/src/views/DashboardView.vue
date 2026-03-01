@@ -5,7 +5,7 @@ import { ArcElement, Chart as ChartJS, Legend, Tooltip } from 'chart.js'
 import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
 import { useAccounts } from '@/composables/useAccounts'
-import { useInvestments } from '@/composables/useInvestments'
+import { useStocks } from '@/composables/useStocks'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -16,9 +16,9 @@ const {
   totalExpense,
 } = useTransactions(() => currentHouseholdId.value)
 const { accounts, totalBalance } = useAccounts(() => currentHouseholdId.value)
-const { investments, totalInvestments, getCurrentAmount } = useInvestments(() => currentHouseholdId.value)
+const { stocks, totalEvaluationAmount } = useStocks()
 
-const grandTotal = computed(() => totalBalance.value + totalInvestments.value)
+const grandTotal = computed(() => totalBalance.value + totalEvaluationAmount.value)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
@@ -65,11 +65,11 @@ const chartData = computed(() => {
       colorIdx++
     }
   }
-  for (const inv of investments.value) {
-    const currentAmount = getCurrentAmount(inv)
-    if (currentAmount > 0) {
-      labels.push(`${inv.name}`)
-      data.push(currentAmount)
+  for (const stock of stocks.value) {
+    const amount = Number(stock.evaluation_amount ?? 0)
+    if (amount > 0) {
+      labels.push(`${stock.symbol}`)
+      data.push(amount)
       bgColors.push(chartColors[colorIdx % chartColors.length])
       colorIdx++
     }
@@ -126,7 +126,7 @@ const chartOptions = {
       <p class="dashboard__hero-amount">{{ grandTotal.toLocaleString() }}<span class="dashboard__hero-unit">円</span></p>
       <div class="dashboard__hero-sub">
         <span>🏦 口座 {{ totalBalance.toLocaleString() }}円</span>
-        <span>📊 資産 {{ totalInvestments.toLocaleString() }}円</span>
+        <span>📊 資産 {{ totalEvaluationAmount.toLocaleString() }}円</span>
       </div>
     </section>
 

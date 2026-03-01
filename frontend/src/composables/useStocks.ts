@@ -57,17 +57,26 @@ export function useStocks() {
     const userId = sessionStore.user?.id
     if (!userId) throw new Error('ログイン情報がありません。')
 
+    const shares = Math.max(0, Number(input.shares || 0))
+    const averagePrice = Math.max(0, Number(input.average_price || 0))
+    const currentPrice = averagePrice
+    const evaluationAmount = currentPrice * shares
+    const profitLoss = (currentPrice - averagePrice) * shares
+    const profitLossRate = averagePrice > 0
+      ? ((currentPrice - averagePrice) / averagePrice) * 100
+      : 0
+
     const payload = {
       user_id: userId,
       symbol: input.symbol.trim().toUpperCase(),
       account_type: input.account_type?.trim() || '未設定',
       securities_account_id: input.securities_account_id ?? null,
-      shares: Math.max(0, Number(input.shares || 0)),
-      average_price: Math.max(0, Number(input.average_price || 0)),
-      current_price: 0,
-      evaluation_amount: 0,
-      profit_loss: 0,
-      profit_loss_rate: 0,
+      shares,
+      average_price: averagePrice,
+      current_price: currentPrice,
+      evaluation_amount: evaluationAmount,
+      profit_loss: profitLoss,
+      profit_loss_rate: profitLossRate,
     }
 
     const { error } = await supabase.from('stocks').insert(payload)

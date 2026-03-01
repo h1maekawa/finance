@@ -3,13 +3,13 @@ import { computed } from 'vue'
 import { useHousehold } from '@/composables/useHousehold'
 import { useSavingsGoal } from '@/composables/useSavingsGoal'
 import { useAccounts } from '@/composables/useAccounts'
-import { useInvestments } from '@/composables/useInvestments'
+import { useStocks } from '@/composables/useStocks'
 
 const { currentHouseholdId } = useHousehold()
 const { totalBalance } = useAccounts(() => currentHouseholdId.value)
-const { totalInvestments } = useInvestments(() => currentHouseholdId.value)
+const { totalEvaluationAmount } = useStocks()
 
-const grandTotal = computed(() => totalBalance.value + totalInvestments.value)
+const grandTotal = computed(() => totalBalance.value + totalEvaluationAmount.value)
 
 const goal = useSavingsGoal(
   () => currentHouseholdId.value,
