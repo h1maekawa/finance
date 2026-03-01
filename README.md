@@ -47,17 +47,6 @@ npm install
 npm run dev
 ```
 
-### 株価更新（Alpha Vantage）
-
-個別株の評価額更新は Supabase Edge Function `update-stock-prices` で実行します。
-
-```bash
-supabase functions deploy update-stock-prices --project-ref <PROJECT_REF>
-supabase secrets set ALPHA_KEY=<YOUR_ALPHA_VANTAGE_API_KEY>
-```
-
-フロントの「個別株」画面で `価格更新` を押すと、Edge Function が `GLOBAL_QUOTE` を取得して `stocks` テーブルを更新します。
-
 ### 環境変数一覧
 
 | 変数名 | 説明 | 取得元 |
@@ -71,6 +60,13 @@ supabase secrets set ALPHA_KEY=<YOUR_ALPHA_VANTAGE_API_KEY>
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Sender ID | 同上 |
 | `VITE_FIREBASE_APP_ID` | Firebase App ID | 同上 |
 | `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics ID | 同上（任意） |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | 連携先スプレッドシートID | Google Sheets URL |
+| `GOOGLE_SHEETS_SHEET_NAME` | 連携先シート名 | 任意（例: `investments`） |
+| `GOOGLE_SHEETS_CLIENT_EMAIL` | Service Accountのclient email | Google Cloud IAM |
+| `GOOGLE_SHEETS_PRIVATE_KEY` | Service Accountのprivate key | Google Cloud IAM |
+| `FIREBASE_ADMIN_PROJECT_ID` | Firebase Admin SDK project id | Firebase プロジェクト設定 |
+| `FIREBASE_ADMIN_CLIENT_EMAIL` | Firebase Admin SDK client email | Firebase Service Account |
+| `FIREBASE_ADMIN_PRIVATE_KEY` | Firebase Admin SDK private key | Firebase Service Account |
 
 ## DB 設計概要
 
@@ -125,6 +121,13 @@ Vercel の **Settings → Environment Variables** に `.env` と同じキー・�
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `858089882597` |
 | `VITE_FIREBASE_APP_ID` | Firebase の App ID |
 | `VITE_FIREBASE_MEASUREMENT_ID` | `G-YME6HPE7CT` |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Google Sheets の Spreadsheet ID |
+| `GOOGLE_SHEETS_SHEET_NAME` | 例: `investments` |
+| `GOOGLE_SHEETS_CLIENT_EMAIL` | Google Service Account のメール |
+| `GOOGLE_SHEETS_PRIVATE_KEY` | Google Service Account の秘密鍵（改行は `\n`） |
+| `FIREBASE_ADMIN_PROJECT_ID` | Firebase Admin SDK の project id |
+| `FIREBASE_ADMIN_CLIENT_EMAIL` | Firebase Admin SDK の client email |
+| `FIREBASE_ADMIN_PRIVATE_KEY` | Firebase Admin SDK の private key（改行は `\n`） |
 
 ### 3. Firebase に Vercel ドメインを追加
 
@@ -142,6 +145,21 @@ your-custom-domain.com        ← カスタムドメインを使う場合
 `frontend/vercel.json` に全パスを `index.html` へリライトする設定済みなので、
 `/transactions` 等を直接開いても 404 にならない。
 
+### 5. Google Sheets 連携（Node.js API）
+
+`frontend/api/sheets/append.js` と `frontend/api/sheets/rows.js` を使って
+Google Sheets API と連携する。
+
+- 銘柄登録時: `/api/sheets/append` を呼び、以下を `USER_ENTERED` で追加
+  - 銘柄コード
+  - 銘柄名
+  - 保有数
+  - `=GOOGLEFINANCE(A{row},"price")`
+  - `=C{row}*D{row}`
+- 画面表示時: `/api/sheets/rows` で計算済みの値を取得して表示
+- APIは Firebase IDトークン（`Authorization: Bearer <token>`）を検証し、
+  シート上の `uid` 列でユーザーごとに行を分離して返す
+
 ---
 
 ## 今後の拡張
@@ -150,52 +168,3 @@ your-custom-domain.com        ← カスタムドメインを使う場合
 - budgets UI 実装
 - materialized view による月次集計高速化
 - 課金テーブル追加（plans / subscriptions / invoices）
-
-## LINE通知（ブラウザ未起動でも通知）
-
-利確通知はフロントではなく、`Supabase Edge Function` を定期実行して送信する。
-
-### 1. DB更新
-
-`backend/supabase/schema.sql` を再実行（`user_notification_channels` / `notification_logs` が追加される）。
-
-### 2. LINE Messaging API準備
-
-1. [LINE Developers](https://developers.line.biz/) で Provider / Messaging API channel を作成  
-2. Channel access token（long-lived）を発行  
-3. 受信先 `line_user_id` を取得（Webhookイベントの `source.userId`）
-
-### 3. Edge Functionデプロイ
-
-```bash
-supabase functions deploy line-take-profit --project-ref <PROJECT_REF>
-```
-
-### 4. Supabase Secrets設定
-
-```bash
-supabase secrets set \\
-  SUPABASE_URL=https://<PROJECT_REF>.supabase.co \\
-  SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY> \\
-  LINE_CHANNEL_ACCESS_TOKEN=<LINE_CHANNEL_ACCESS_TOKEN> \\
-  CRON_SECRET=<RANDOM_SECRET> \\
-  ALPHA_VANTAGE_API_KEY=<ALPHA_VANTAGE_API_KEY>
-```
-
-`FINNHUB_API_KEY` を使う場合は `ALPHA_VANTAGE_API_KEY` の代わりに設定してもよい。
-
-### 5. 定期実行（Cron）
-
-任意のサーバーCron / GitHub Actions / Vercel Cron で以下URLを叩く。
-
-```bash
-curl -X POST \"https://<PROJECT_REF>.supabase.co/functions/v1/line-take-profit\" \\
-  -H \"x-cron-secret: <CRON_SECRET>\"
-```
-
-5〜10分間隔を推奨。
-
-### 6. アプリ設定
-
-設定画面に追加した `LINE User ID` 欄に `U...` 形式の userId を保存する。  
-そのユーザーにのみ利確通知が送られる。

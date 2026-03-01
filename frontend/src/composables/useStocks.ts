@@ -2,6 +2,11 @@ import { computed, ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { sessionStore } from '@/stores/session'
 import type { Stock } from '@/types/db'
+import {
+  appendInvestmentToSheet,
+  fetchInvestmentRowsFromSheet,
+  type SheetInvestmentRow,
+} from '@/services/sheetsService'
 
 type StockInput = {
   symbol: string
@@ -18,6 +23,10 @@ export function useStocks() {
   const loading = ref(false)
   const updatingPrices = ref(false)
   const updateErrors = ref<string[]>([])
+  const syncingSheet = ref(false)
+  const sheetLoading = ref(false)
+  const sheetError = ref('')
+  const sheetRows = ref<SheetInvestmentRow[]>([])
 
   const totalEvaluationAmount = computed(() =>
     stocks.value.reduce((sum, s) => sum + Number(s.evaluation_amount ?? 0), 0),
@@ -93,6 +102,25 @@ export function useStocks() {
 
     const { error } = await supabase.from('investments').insert(payload)
     if (error) throw error
+
+    // 既存機能を壊さないため、Sheets同期失敗でも登録自体は成功とする
+    syncingSheet.value = true
+    try {
+      await appendInvestmentToSheet({
+        symbol: payload.symbol,
+        name: payload.name,
+        quantity: payload.quantity,
+      })
+      sheetError.value = ''
+      await fetchSheetRows()
+    } catch (sheetSyncError) {
+      sheetError.value = sheetSyncError instanceof Error
+        ? sheetSyncError.message
+        : 'Google Sheets への同期に失敗しました。'
+    } finally {
+      syncingSheet.value = false
+    }
+
     await fetchStocks()
   }
 
@@ -135,26 +163,89 @@ export function useStocks() {
     await fetchStocks()
   }
 
+  async function fetchSheetRows() {
+    sheetLoading.value = true
+    try {
+      const rows = await fetchInvestmentRowsFromSheet()
+      sheetRows.value = rows
+      sheetError.value = ''
+      return rows
+    } catch (error) {
+      sheetError.value = error instanceof Error ? error.message : 'Google Sheets の取得に失敗しました。'
+      throw error
+    } finally {
+      sheetLoading.value = false
+    }
+  }
+
+  function buildSheetKey(symbol: string, name: string) {
+    return `${symbol.trim().toUpperCase()}::${name.trim()}`
+  }
+
   async function updatePrices() {
     updatingPrices.value = true
     updateErrors.value = []
-    const { data, error } = await supabase.functions.invoke('update-stock-prices', {
-      method: 'POST',
-    })
-    updatingPrices.value = false
+    try {
+      const rows = await fetchSheetRows()
+      const rowMap = new Map<string, SheetInvestmentRow>()
+      for (const row of rows) {
+        rowMap.set(buildSheetKey(row.symbol, row.name), row)
+      }
 
-    if (error) {
-      throw new Error(error.message)
+      for (const stock of stocks.value.filter((s) => s.type === 'stock')) {
+        const key = buildSheetKey(stock.symbol, stock.name)
+        const matched = rowMap.get(key)
+        if (!matched) {
+          updateErrors.value.push(`${stock.symbol}: Sheetsに一致データがありません`)
+          continue
+        }
+
+        const currentPrice = Number(matched.currentPrice ?? 0)
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+          updateErrors.value.push(`${stock.symbol}: 現在価格が不正です`)
+          continue
+        }
+
+        const quantity = Number(stock.quantity ?? 0)
+        const averagePrice = Number(stock.average_price ?? 0)
+        const evaluationAmount = currentPrice * quantity
+        const profitLoss = (currentPrice - averagePrice) * quantity
+        const profitLossRate = averagePrice > 0
+          ? ((currentPrice - averagePrice) / averagePrice) * 100
+          : 0
+
+        const { error } = await supabase
+          .from('investments')
+          .update({
+            current_price: currentPrice,
+            evaluation_amount: evaluationAmount,
+            profit_loss: profitLoss,
+            profit_loss_rate: profitLossRate,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', stock.id)
+
+        if (error) {
+          updateErrors.value.push(`${stock.symbol}: ${error.message}`)
+        }
+      }
+
+      await fetchStocks()
+    } finally {
+      updatingPrices.value = false
     }
-
-    const payload = (data ?? {}) as { errors?: string[] }
-    updateErrors.value = payload.errors ?? []
-    await fetchStocks()
   }
 
   watch(
     () => sessionStore.user?.id,
-    () => void fetchStocks(),
+    (userId) => {
+      if (!userId) {
+        sheetRows.value = []
+        return
+      }
+      void fetchStocks()
+      void fetchSheetRows()
+    },
     { immediate: true },
   )
 
@@ -163,8 +254,13 @@ export function useStocks() {
     loading,
     updatingPrices,
     updateErrors,
+    syncingSheet,
+    sheetLoading,
+    sheetError,
+    sheetRows,
     totalEvaluationAmount,
     fetchStocks,
+    fetchSheetRows,
     addStock,
     deleteStock,
     updateFundPrice,

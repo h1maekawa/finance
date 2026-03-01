@@ -9,8 +9,13 @@ const {
   loading,
   updatingPrices,
   updateErrors,
+  syncingSheet,
+  sheetLoading,
+  sheetError,
+  sheetRows,
   totalEvaluationAmount,
   fetchStocks,
+  fetchSheetRows,
   addStock,
   deleteStock,
   updateFundPrice,
@@ -172,8 +177,8 @@ async function handleUpdatePrices() {
     await updatePrices()
   } catch (error) {
     formError.value = error instanceof Error
-      ? `個別株の価格更新に失敗しました。(${error.message})`
-      : '個別株の価格更新に失敗しました。'
+      ? `価格同期に失敗しました。(${error.message})`
+      : '価格同期に失敗しました。'
   }
 }
 
@@ -226,7 +231,7 @@ watch(
       <p class="stocks-view__summary-sub">評価損益合計: <span :class="profitClass(totalProfitLoss)">{{ formatNumber(totalProfitLoss, 0) }} 円</span></p>
       <p class="stocks-view__summary-sub">評価損益率合計: <span :class="profitClass(totalProfitLossRate)">{{ formatNumber(totalProfitLossRate, 2) }}%</span></p>
       <button class="stocks-view__update-btn" :disabled="updatingPrices" @click="handleUpdatePrices">
-        {{ updatingPrices ? '更新中...' : '価格更新（個別株のみ）' }}
+        {{ updatingPrices ? '更新中...' : '価格更新（Google Sheets）' }}
       </button>
       <p class="stocks-view__summary-sub">最終更新: {{ lastUpdatedLabel }}</p>
       <ul v-if="updateErrors.length > 0" class="stocks-view__errors">
@@ -238,6 +243,39 @@ watch(
     <section class="card stocks-view__register">
       <h3 style="margin: 0;">投資銘柄登録</h3>
       <button type="button" @click="showAddModal = true">登録</button>
+    </section>
+
+    <section class="card stocks-view__table-wrap">
+      <div class="stocks-view__sheet-head">
+        <h3 style="margin: 0;">Google Sheets 連携データ</h3>
+        <button :disabled="sheetLoading" @click="fetchSheetRows">
+          {{ sheetLoading ? '取得中...' : '再取得' }}
+        </button>
+      </div>
+      <p v-if="syncingSheet" class="stocks-view__sheet-meta">Sheetsに同期中...</p>
+      <p v-if="sheetError" class="stocks-view__error">{{ sheetError }}</p>
+      <p v-if="sheetLoading">読み込み中...</p>
+      <p v-else-if="sheetRows.length === 0">Sheetsにデータがありません。</p>
+      <table v-else class="stocks-view__table">
+        <thead>
+          <tr>
+            <th>銘柄コード</th>
+            <th>銘柄名</th>
+            <th>保有数</th>
+            <th>現在価格</th>
+            <th>評価額</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, idx) in sheetRows" :key="`${row.symbol}-${idx}`">
+            <td>{{ row.symbol }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ formatNumber(Number(row.quantity), 4) }}</td>
+            <td>{{ formatNumber(Number(row.currentPrice), 2) }}</td>
+            <td>{{ formatNumber(Number(row.evaluationAmount), 0) }}</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <div v-if="showAddModal" class="stocks-view__modal-overlay" @click.self="showAddModal = false">
@@ -463,6 +501,19 @@ watch(
 
 .stocks-view__table-wrap {
   overflow-x: auto;
+}
+
+.stocks-view__sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.stocks-view__sheet-meta {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.9rem;
 }
 
 .stocks-view__table {
