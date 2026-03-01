@@ -60,13 +60,8 @@ npm run dev
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Sender ID | 同上 |
 | `VITE_FIREBASE_APP_ID` | Firebase App ID | 同上 |
 | `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics ID | 同上（任意） |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | 連携先スプレッドシートID | Google Sheets URL |
-| `GOOGLE_SHEETS_SHEET_NAME` | 連携先シート名 | 任意（例: `investments`） |
-| `GOOGLE_SHEETS_CLIENT_EMAIL` | Service Accountのclient email | Google Cloud IAM |
-| `GOOGLE_SHEETS_PRIVATE_KEY` | Service Accountのprivate key | Google Cloud IAM |
-| `FIREBASE_ADMIN_PROJECT_ID` | Firebase Admin SDK project id | Firebase プロジェクト設定 |
-| `FIREBASE_ADMIN_CLIENT_EMAIL` | Firebase Admin SDK client email | Firebase Service Account |
-| `FIREBASE_ADMIN_PRIVATE_KEY` | Firebase Admin SDK private key | Firebase Service Account |
+| `VITE_GAS_WEBAPP_URL` | GAS Web App URL | Apps Script デプロイ画面 |
+| `VITE_GAS_SECRET` | GAS共有シークレット | 自分で作成 |
 
 ## DB 設計概要
 
@@ -121,13 +116,8 @@ Vercel の **Settings → Environment Variables** に `.env` と同じキー・�
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | `858089882597` |
 | `VITE_FIREBASE_APP_ID` | Firebase の App ID |
 | `VITE_FIREBASE_MEASUREMENT_ID` | `G-YME6HPE7CT` |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | Google Sheets の Spreadsheet ID |
-| `GOOGLE_SHEETS_SHEET_NAME` | 例: `investments` |
-| `GOOGLE_SHEETS_CLIENT_EMAIL` | Google Service Account のメール |
-| `GOOGLE_SHEETS_PRIVATE_KEY` | Google Service Account の秘密鍵（改行は `\n`） |
-| `FIREBASE_ADMIN_PROJECT_ID` | Firebase Admin SDK の project id |
-| `FIREBASE_ADMIN_CLIENT_EMAIL` | Firebase Admin SDK の client email |
-| `FIREBASE_ADMIN_PRIVATE_KEY` | Firebase Admin SDK の private key（改行は `\n`） |
+| `VITE_GAS_WEBAPP_URL` | Apps Script の Web App URL |
+| `VITE_GAS_SECRET` | GAS 側の `APP_SECRET` と同値 |
 
 ### 3. Firebase に Vercel ドメインを追加
 
@@ -145,20 +135,14 @@ your-custom-domain.com        ← カスタムドメインを使う場合
 `frontend/vercel.json` に全パスを `index.html` へリライトする設定済みなので、
 `/transactions` 等を直接開いても 404 にならない。
 
-### 5. Google Sheets 連携（Node.js API）
+### 5. Google Sheets 連携（Google Apps Script）
 
-`frontend/api/sheets/append.js` と `frontend/api/sheets/rows.js` を使って
-Google Sheets API と連携する。
+フロントは `VITE_GAS_WEBAPP_URL` を直接呼び出し、
+銘柄追加時に `USER_ENTERED` 相当の数式をシートへ反映する。
 
-- 銘柄登録時: `/api/sheets/append` を呼び、以下を `USER_ENTERED` で追加
-  - 銘柄コード
-  - 銘柄名
-  - 保有数
-  - `=GOOGLEFINANCE(A{row},"price")`
-  - `=C{row}*D{row}`
-- 画面表示時: `/api/sheets/rows` で計算済みの値を取得して表示
-- APIは Firebase IDトークン（`Authorization: Bearer <token>`）を検証し、
-  シート上の `uid` 列でユーザーごとに行を分離して返す
+- 追加時: `symbol / name / quantity / uid / secret` を GAS へ送信
+- GAS 側で `=GOOGLEFINANCE(A{row},"price")` と `=C{row}*D{row}` を設定
+- 取得時: `uid + secret` で自分の行のみ返却
 
 ---
 
