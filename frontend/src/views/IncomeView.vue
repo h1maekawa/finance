@@ -3,12 +3,10 @@ import { computed } from 'vue'
 import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
-import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 
 const { currentHouseholdId } = useHousehold()
 const { categories } = useCategories(() => currentHouseholdId.value)
 const { transactions, selectedMonth, totalIncome, totalExpense } = useTransactions(() => currentHouseholdId.value)
-const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
@@ -41,10 +39,6 @@ const recommendedCapitalGainCategories = ['個別株キャピタルゲイン', '
     </section>
 
     <section class="row">
-      <article class="card" style="flex: 1; min-width: 220px;">
-        <h3>総資産額</h3>
-        <p>{{ totalAssets.toLocaleString() }} 円</p>
-      </article>
       <article class="card" style="flex: 1; min-width: 220px;">
         <h3>今月の収入合計</h3>
         <p>{{ totalIncome.toLocaleString() }} 円</p>
