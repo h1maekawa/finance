@@ -80,10 +80,10 @@ export type Stock = {
   id: string
   user_id: string
   symbol: string
-  instrument_type: 'stock' | 'fund' | 'etf'
+  type: 'stock' | 'fund'
+  name: string
   account_type: string
-  securities_account_id: string | null
-  shares: number
+  quantity: number
   average_price: number
   current_price: number
   evaluation_amount: number

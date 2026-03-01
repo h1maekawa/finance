@@ -1,15 +1,16 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { sessionStore } from '@/stores/session'
 import type { Stock } from '@/types/db'
 
 type StockInput = {
   symbol: string
-  instrument_type: 'stock' | 'fund' | 'etf'
+  name: string
+  type: 'stock' | 'fund'
   account_type?: string
-  securities_account_id?: string | null
-  shares: number
+  quantity: number
   average_price: number
+  current_price?: number | null
 }
 
 export function useStocks() {
@@ -31,15 +32,15 @@ export function useStocks() {
 
     loading.value = true
     const { data, error } = await supabase
-      .from('stocks')
+      .from('investments')
       .select(`
         id,
         user_id,
+        type,
         symbol,
-        instrument_type,
+        name,
         account_type,
-        securities_account_id,
-        shares,
+        quantity,
         average_price,
         current_price,
         evaluation_amount,
@@ -48,33 +49,41 @@ export function useStocks() {
         updated_at
       `)
       .eq('user_id', userId)
-      .order('symbol', { ascending: true })
+      .order('name', { ascending: true })
     loading.value = false
 
     if (error) throw error
-    stocks.value = (data ?? []) as Stock[]
+    stocks.value = ((data ?? []) as Stock[]).map((row) => ({
+      ...row,
+      quantity: Number(row.quantity ?? 0),
+      average_price: Number(row.average_price ?? 0),
+      current_price: Number(row.current_price ?? 0),
+      evaluation_amount: Number(row.evaluation_amount ?? 0),
+      profit_loss: Number(row.profit_loss ?? 0),
+      profit_loss_rate: Number(row.profit_loss_rate ?? 0),
+    }))
   }
 
   async function addStock(input: StockInput) {
     const userId = sessionStore.user?.id
     if (!userId) throw new Error('ログイン情報がありません。')
 
-    const shares = Math.max(0, Number(input.shares || 0))
+    const quantity = Math.max(0, Number(input.quantity || 0))
     const averagePrice = Math.max(0, Number(input.average_price || 0))
-    const currentPrice = averagePrice
-    const evaluationAmount = currentPrice * shares
-    const profitLoss = (currentPrice - averagePrice) * shares
+    const currentPrice = Math.max(0, Number(input.current_price ?? averagePrice))
+    const evaluationAmount = currentPrice * quantity
+    const profitLoss = (currentPrice - averagePrice) * quantity
     const profitLossRate = averagePrice > 0
       ? ((currentPrice - averagePrice) / averagePrice) * 100
       : 0
 
     const payload = {
       user_id: userId,
+      type: input.type,
       symbol: input.symbol.trim().toUpperCase(),
-      instrument_type: input.instrument_type,
+      name: input.name.trim() || input.symbol.trim().toUpperCase(),
       account_type: input.account_type?.trim() || '未設定',
-      securities_account_id: input.securities_account_id ?? null,
-      shares,
+      quantity,
       average_price: averagePrice,
       current_price: currentPrice,
       evaluation_amount: evaluationAmount,
@@ -82,13 +91,13 @@ export function useStocks() {
       profit_loss_rate: profitLossRate,
     }
 
-    const { error } = await supabase.from('stocks').insert(payload)
+    const { error } = await supabase.from('investments').insert(payload)
     if (error) throw error
     await fetchStocks()
   }
 
   async function deleteStock(id: string) {
-    const { error } = await supabase.from('stocks').delete().eq('id', id)
+    const { error } = await supabase.from('investments').delete().eq('id', id)
     if (error) throw error
     stocks.value = stocks.value.filter((s) => s.id !== id)
   }
@@ -109,6 +118,12 @@ export function useStocks() {
     updateErrors.value = payload.errors ?? []
     await fetchStocks()
   }
+
+  watch(
+    () => sessionStore.user?.id,
+    () => void fetchStocks(),
+    { immediate: true },
+  )
 
   return {
     stocks,

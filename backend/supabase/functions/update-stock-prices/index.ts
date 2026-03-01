@@ -1,10 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-type StockRow = {
+type InvestmentRow = {
   id: string
   user_id: string
+  type: 'stock' | 'fund'
   symbol: string
-  shares: number
+  quantity: number
   average_price: number
 }
 
@@ -78,14 +79,15 @@ Deno.serve(async (req) => {
     const userId = me.user.id
 
     const { data, error } = await client
-      .from('stocks')
-      .select('id, user_id, symbol, shares, average_price')
+      .from('investments')
+      .select('id, user_id, type, symbol, quantity, average_price')
       .eq('user_id', userId)
+      .eq('type', 'stock')
       .order('symbol', { ascending: true })
 
     if (error) throw error
 
-    const stocks = (data ?? []) as StockRow[]
+    const stocks = (data ?? []) as InvestmentRow[]
     if (stocks.length === 0) {
       return new Response(JSON.stringify({ updated: 0, errors: [] }), {
         status: 200,
@@ -118,16 +120,16 @@ Deno.serve(async (req) => {
       const currentPrice = quoteBySymbol.get(symbol)
       if (!currentPrice) continue
 
-      const shares = Number(stock.shares ?? 0)
+      const quantity = Number(stock.quantity ?? 0)
       const averagePrice = Number(stock.average_price ?? 0)
-      const evaluationAmount = currentPrice * shares
-      const profitLoss = (currentPrice - averagePrice) * shares
+      const evaluationAmount = currentPrice * quantity
+      const profitLoss = (currentPrice - averagePrice) * quantity
       const profitLossRate = averagePrice > 0
         ? ((currentPrice - averagePrice) / averagePrice) * 100
         : 0
 
       const { error: updateError } = await client
-        .from('stocks')
+        .from('investments')
         .update({
           current_price: currentPrice,
           evaluation_amount: evaluationAmount,

@@ -208,6 +208,24 @@ create table if not exists public.stocks (
   constraint stocks_shares_non_negative check (shares >= 0),
   constraint stocks_average_price_non_negative check (average_price >= 0)
 );
+create table if not exists public.investments (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  type text not null check (type in ('stock', 'fund')),
+  symbol text not null,
+  name text not null,
+  account_type text not null default '未設定',
+  quantity numeric(20, 6) not null default 0,
+  average_price numeric(20, 6) not null default 0,
+  current_price numeric(20, 6) not null default 0,
+  evaluation_amount numeric(20, 6) not null default 0,
+  profit_loss numeric(20, 6) not null default 0,
+  profit_loss_rate numeric(10, 4) not null default 0,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  constraint investments_quantity_non_negative check (quantity >= 0),
+  constraint investments_average_price_non_negative check (average_price >= 0)
+);
 create table if not exists public.user_notification_channels (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
@@ -325,6 +343,54 @@ if not exists (
     add constraint investment_assets_quantity_non_negative check (quantity >= 0);
 end if;
 end $$;
+-- stocks から investments への移行（既存DB向け）
+do $$ begin
+if exists (
+  select 1
+  from information_schema.tables
+  where table_schema = 'public'
+    and table_name = 'stocks'
+) then
+  insert into public.investments (
+    user_id,
+    type,
+    symbol,
+    name,
+    account_type,
+    quantity,
+    average_price,
+    current_price,
+    evaluation_amount,
+    profit_loss,
+    profit_loss_rate,
+    updated_at,
+    created_at
+  )
+  select
+    s.user_id,
+    case when s.instrument_type = 'stock' then 'stock' else 'fund' end as type,
+    s.symbol,
+    s.symbol as name,
+    coalesce(s.account_type, '未設定'),
+    coalesce(s.shares, 0),
+    coalesce(s.average_price, 0),
+    coalesce(s.current_price, 0),
+    coalesce(s.evaluation_amount, 0),
+    coalesce(s.profit_loss, 0),
+    coalesce(s.profit_loss_rate, 0),
+    coalesce(s.updated_at, now()),
+    coalesce(s.created_at, now())
+  from public.stocks s
+  where not exists (
+    select 1
+    from public.investments i
+    where i.user_id = s.user_id
+      and i.symbol = s.symbol
+      and i.account_type = coalesce(s.account_type, '未設定')
+      and i.type = case when s.instrument_type = 'stock' then 'stock' else 'fund' end
+  );
+end if;
+end $$;
 -- stocks 銘柄種別追加（既存DB向け）
 alter table public.stocks add column if not exists instrument_type text not null default 'stock';
 do $$ begin
@@ -382,6 +448,8 @@ create index if not exists idx_investment_assets_household_id on public.investme
 create index if not exists idx_investment_assets_household_ticker on public.investment_assets (household_id, ticker);
 create index if not exists idx_investment_assets_notify_tp on public.investment_assets (household_id, notify_take_profit);
 create index if not exists idx_stocks_user_symbol on public.stocks (user_id, symbol);
+create index if not exists idx_investments_user_type_symbol on public.investments (user_id, type, symbol);
+create index if not exists idx_investments_user_updated_at on public.investments (user_id, updated_at desc);
 create index if not exists idx_user_notification_channels_user on public.user_notification_channels (user_id, provider, is_active);
 create index if not exists idx_notification_logs_user_created on public.notification_logs (user_id, created_at desc);
 create index if not exists idx_monthly_snapshots_household_month on public.monthly_snapshots (household_id, target_month desc);
@@ -566,6 +634,11 @@ create trigger trg_stocks_timestamps before
 insert
   or
 update on public.stocks for each row execute function public.set_timestamps();
+drop trigger if exists trg_investments_timestamps on public.investments;
+create trigger trg_investments_timestamps before
+insert
+  or
+update on public.investments for each row execute function public.set_timestamps();
 drop trigger if exists trg_user_notification_channels_timestamps on public.user_notification_channels;
 create trigger trg_user_notification_channels_timestamps before
 insert
@@ -592,6 +665,7 @@ alter table public.credit_cards enable row level security;
 alter table public.securities_accounts enable row level security;
 alter table public.investment_assets enable row level security;
 alter table public.stocks enable row level security;
+alter table public.investments enable row level security;
 alter table public.user_notification_channels enable row level security;
 alter table public.notification_logs enable row level security;
 alter table public.monthly_snapshots enable row level security;
@@ -678,6 +752,19 @@ create policy stocks_update_own on public.stocks for
 update using (user_id = (auth.jwt()->>'sub')) with check (user_id = (auth.jwt()->>'sub'));
 drop policy if exists stocks_delete_own on public.stocks;
 create policy stocks_delete_own on public.stocks for
+delete using (user_id = (auth.jwt()->>'sub'));
+-- investments
+drop policy if exists investments_select_own on public.investments;
+create policy investments_select_own on public.investments for
+select using (user_id = (auth.jwt()->>'sub'));
+drop policy if exists investments_insert_own on public.investments;
+create policy investments_insert_own on public.investments for
+insert with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists investments_update_own on public.investments;
+create policy investments_update_own on public.investments for
+update using (user_id = (auth.jwt()->>'sub')) with check (user_id = (auth.jwt()->>'sub'));
+drop policy if exists investments_delete_own on public.investments;
+create policy investments_delete_own on public.investments for
 delete using (user_id = (auth.jwt()->>'sub'));
 -- user_notification_channels
 drop policy if exists user_notification_channels_select_own on public.user_notification_channels;

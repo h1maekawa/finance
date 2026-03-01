@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useStocks } from '@/composables/useStocks'
 import { useHousehold } from '@/composables/useHousehold'
 import { useSecuritiesAccounts } from '@/composables/useSecuritiesAccounts'
@@ -15,40 +15,38 @@ const {
   deleteStock,
   updatePrices,
 } = useStocks()
+
 const { currentHouseholdId } = useHousehold()
 const { activeSecuritiesAccounts } = useSecuritiesAccounts(() => currentHouseholdId.value)
 
 const formError = ref('')
 const symbolInput = ref('')
-const instrumentTypeInput = ref<'stock' | 'fund' | 'etf'>('stock')
-const securitiesAccountIdInput = ref('')
-const sharesInput = ref<number | undefined>(undefined)
+const nameInput = ref('')
+const typeInput = ref<'stock' | 'fund'>('stock')
+const accountTypeInput = ref('')
+const quantityInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
+const currentPriceInput = ref<number | undefined>(undefined)
 const showAddModal = ref(false)
 
+let autoTimer: number | null = null
+
 const stockCandidates = [
-  { symbol: 'NVDA', name: 'エヌビディア' },
-  { symbol: 'AAPL', name: 'アップル' },
-  { symbol: 'MSFT', name: 'マイクロソフト' },
-  { symbol: 'GOOGL', name: 'アルファベット' },
-  { symbol: 'AMZN', name: 'アマゾン' },
-  { symbol: 'META', name: 'メタ・プラットフォームズ' },
-  { symbol: 'TSLA', name: 'テスラ' },
-  { symbol: 'KO', name: 'コカ・コーラ' },
-  { symbol: 'MU', name: 'マイクロン・テクノロジー' },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
-  { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF' },
-  { symbol: 'VOO', name: 'Vanguard S&P 500 ETF' },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust' },
-  { symbol: 'VT', name: 'Vanguard Total World Stock ETF' },
-  { symbol: '楽天・全米株式インデックス・ファンド(楽天・VTI)', name: '投資信託' },
-  { symbol: 'eMAXIS Slim 先進国株式インデックス(除く日本)', name: '投資信託' },
-  { symbol: 'eMAXIS Slim 全世界株式(オール・カントリー)', name: '投資信託' },
-  { symbol: '楽天・オールカントリー株式インデックス・ファンド', name: '投資信託' },
+  { symbol: 'NVDA', name: 'エヌビディア', type: 'stock' as const },
+  { symbol: 'AAPL', name: 'アップル', type: 'stock' as const },
+  { symbol: 'MSFT', name: 'マイクロソフト', type: 'stock' as const },
+  { symbol: 'KO', name: 'コカ・コーラ', type: 'stock' as const },
+  { symbol: 'MU', name: 'マイクロン・テクノロジー', type: 'stock' as const },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', type: 'stock' as const },
+  { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'stock' as const },
+  { symbol: '楽天・全米株式インデックス・ファンド(楽天・VTI)', name: '楽天・全米株式インデックス・ファンド(楽天・VTI)', type: 'fund' as const },
+  { symbol: 'eMAXIS Slim 先進国株式インデックス(除く日本)', name: 'eMAXIS Slim 先進国株式インデックス(除く日本)', type: 'fund' as const },
+  { symbol: 'eMAXIS Slim 全世界株式(オール・カントリー)', name: 'eMAXIS Slim 全世界株式(オール・カントリー)', type: 'fund' as const },
+  { symbol: '楽天・オールカントリー株式インデックス・ファンド', name: '楽天・オールカントリー株式インデックス・ファンド', type: 'fund' as const },
 ]
 
-const filteredStockCandidates = computed(() => {
-  const keyword = symbolInput.value.trim().toLowerCase()
+const filteredCandidates = computed(() => {
+  const keyword = `${symbolInput.value} ${nameInput.value}`.trim().toLowerCase()
   if (!keyword) return stockCandidates.slice(0, 8)
   return stockCandidates
     .filter((item) =>
@@ -57,54 +55,44 @@ const filteredStockCandidates = computed(() => {
     .slice(0, 8)
 })
 
-function selectStockCandidate(symbol: string) {
-  symbolInput.value = symbol
-}
-
-const tableRows = computed(() =>
-  stocks.value.map((stock) => ({
-    id: stock.id,
-    tradeLabel: '現物',
-    symbol: stock.symbol,
-    instrumentType: stock.instrument_type,
-    accountType: stock.account_type,
-    securitiesAccountId: stock.securities_account_id,
-    shares: Number(stock.shares ?? 0),
-    averagePrice: Number(stock.average_price ?? 0),
-    currentPrice: Number(stock.current_price ?? 0),
-    evaluationAmount: Number(stock.evaluation_amount ?? 0),
-    profitLoss: Number(stock.profit_loss ?? 0),
-    profitLossRate: Number(stock.profit_loss_rate ?? 0),
-  })),
-)
-
-const taxCategoryLabel: Record<string, string> = {
-  nisa_growth: 'NISA 成長投資枠',
-  nisa_tsumitate: 'NISA つみたて投資枠',
-  specified: '特定口座',
-  general: '一般口座',
-}
-
-function resolveAccountLabel(row: { accountType: string; securitiesAccountId: string | null }) {
-  if (!row.securitiesAccountId) return row.accountType
-  const account = activeSecuritiesAccounts.value.find((v) => v.id === row.securitiesAccountId)
-  if (!account) return row.accountType
-  return `${account.broker_name} / ${taxCategoryLabel[account.tax_category] ?? account.tax_category}`
-}
-
-function quantityUnit(type: 'stock' | 'fund' | 'etf') {
-  return type === 'stock' ? '株' : '口'
-}
-
 const totalProfitLoss = computed(() =>
-  tableRows.value.reduce((sum, row) => sum + row.profitLoss, 0),
+  stocks.value.reduce((sum, row) => sum + Number(row.profit_loss ?? 0), 0),
 )
 
 const totalProfitLossRate = computed(() => {
-  const costTotal = tableRows.value.reduce((sum, row) => sum + (row.averagePrice * row.shares), 0)
+  const costTotal = stocks.value.reduce((sum, row) => sum + (Number(row.average_price ?? 0) * Number(row.quantity ?? 0)), 0)
   if (costTotal <= 0) return 0
   return (totalProfitLoss.value / costTotal) * 100
 })
+
+const stockRows = computed(() => stocks.value.filter((row) => row.type === 'stock'))
+const fundRows = computed(() => stocks.value.filter((row) => row.type === 'fund'))
+
+const lastUpdatedLabel = computed(() => {
+  if (stocks.value.length === 0) return '未更新'
+  const latest = stocks.value.reduce((acc, row) => {
+    const ts = row.updated_at ? new Date(row.updated_at).getTime() : 0
+    return Math.max(acc, ts)
+  }, 0)
+  if (!latest) return '未更新'
+  return new Date(latest).toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+})
+
+function selectCandidate(candidate: { symbol: string; name: string; type: 'stock' | 'fund' }) {
+  symbolInput.value = candidate.symbol
+  nameInput.value = candidate.name
+  typeInput.value = candidate.type
+}
+
+function quantityUnit(type: 'stock' | 'fund') {
+  return type === 'stock' ? '株' : '口'
+}
 
 function formatNumber(value: number, fractionDigits = 2) {
   return value.toLocaleString(undefined, {
@@ -119,35 +107,53 @@ function profitClass(value: number) {
   return ''
 }
 
-async function handleAddStock() {
+async function handleAddInvestment() {
   formError.value = ''
 
   if (!symbolInput.value.trim()) {
-    formError.value = '銘柄を入力してください。'
+    formError.value = '銘柄コードを入力してください。'
+    return
+  }
+  if (!nameInput.value.trim()) {
+    formError.value = '銘柄名を入力してください。'
     return
   }
 
   try {
-    const selectedAccount = activeSecuritiesAccounts.value.find((v) => v.id === securitiesAccountIdInput.value)
     await addStock({
       symbol: symbolInput.value,
-      instrument_type: instrumentTypeInput.value,
-      account_type: selectedAccount
-        ? `${selectedAccount.broker_name} / ${taxCategoryLabel[selectedAccount.tax_category] ?? selectedAccount.tax_category}`
-        : '未設定',
-      securities_account_id: selectedAccount?.id ?? null,
-      shares: sharesInput.value ?? 0,
+      name: nameInput.value,
+      type: typeInput.value,
+      account_type: accountTypeInput.value || '未設定',
+      quantity: quantityInput.value ?? 0,
       average_price: averagePriceInput.value ?? 0,
+      current_price: typeInput.value === 'fund' ? (currentPriceInput.value ?? averagePriceInput.value ?? 0) : undefined,
     })
+
     symbolInput.value = ''
-    instrumentTypeInput.value = 'stock'
-    securitiesAccountIdInput.value = ''
-    sharesInput.value = undefined
+    nameInput.value = ''
+    typeInput.value = 'stock'
+    accountTypeInput.value = ''
+    quantityInput.value = undefined
     averagePriceInput.value = undefined
+    currentPriceInput.value = undefined
     showAddModal.value = false
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '銘柄の追加に失敗しました。'
+    formError.value = error instanceof Error ? error.message : '登録に失敗しました。'
   }
+}
+
+function onSelectSecuritiesAccount(accountId: string) {
+  const account = activeSecuritiesAccounts.value.find((v) => v.id === accountId)
+  if (!account) return
+  const taxLabel = account.tax_category === 'nisa_growth'
+    ? 'NISA 成長投資枠'
+    : account.tax_category === 'nisa_tsumitate'
+      ? 'NISA つみたて投資枠'
+      : account.tax_category === 'specified'
+        ? '特定口座'
+        : '一般口座'
+  accountTypeInput.value = `${account.broker_name} / ${taxLabel}`
 }
 
 async function handleUpdatePrices() {
@@ -170,19 +176,29 @@ async function handleDelete(id: string) {
 
 onMounted(() => {
   void fetchStocks()
+  autoTimer = window.setInterval(() => {
+    void handleUpdatePrices()
+  }, 5 * 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (autoTimer !== null) {
+    window.clearInterval(autoTimer)
+  }
 })
 </script>
 
 <template>
   <main class="stocks-view">
     <section class="stocks-view__summary card">
-      <h2 class="stocks-view__title">個別株ポートフォリオ</h2>
+      <h2 class="stocks-view__title">投資（個別株・投資信託）</h2>
       <p class="stocks-view__summary-value">評価額合計: {{ formatNumber(totalEvaluationAmount, 0) }} 円</p>
       <p class="stocks-view__summary-sub">評価損益合計: <span :class="profitClass(totalProfitLoss)">{{ formatNumber(totalProfitLoss, 0) }} 円</span></p>
       <p class="stocks-view__summary-sub">評価損益率合計: <span :class="profitClass(totalProfitLossRate)">{{ formatNumber(totalProfitLossRate, 2) }}%</span></p>
       <button class="stocks-view__update-btn" :disabled="updatingPrices" @click="handleUpdatePrices">
-        {{ updatingPrices ? '更新中...' : '価格更新' }}
+        {{ updatingPrices ? '更新中...' : '価格更新（個別株のみ）' }}
       </button>
+      <p class="stocks-view__summary-sub">最終更新: {{ lastUpdatedLabel }}</p>
       <ul v-if="updateErrors.length > 0" class="stocks-view__errors">
         <li v-for="err in updateErrors" :key="err">{{ err }}</li>
       </ul>
@@ -190,45 +206,54 @@ onMounted(() => {
     </section>
 
     <section class="card stocks-view__register">
-      <h3 style="margin: 0;">株式登録</h3>
+      <h3 style="margin: 0;">投資銘柄登録</h3>
       <button type="button" @click="showAddModal = true">登録</button>
     </section>
 
     <div v-if="showAddModal" class="stocks-view__modal-overlay" @click.self="showAddModal = false">
       <section class="stocks-view__modal card">
         <h3 style="margin-top: 0;">銘柄追加</h3>
-        <form class="stocks-view__form" @submit.prevent="handleAddStock">
-          <input v-model="symbolInput" type="text" placeholder="銘柄コード/銘柄名（例: AAPL, 楽天・全米株式インデックス・ファンド）" required />
-          <ul v-if="filteredStockCandidates.length > 0" class="stocks-view__suggestions">
+        <form class="stocks-view__form" @submit.prevent="handleAddInvestment">
+          <select v-model="typeInput" required>
+            <option value="stock">個別株（株）</option>
+            <option value="fund">投資信託・ETF（口）</option>
+          </select>
+          <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: NVDA）" required />
+          <input v-model="nameInput" type="text" placeholder="銘柄名（例: 楽天・全米株式インデックス・ファンド）" required />
+          <ul v-if="filteredCandidates.length > 0" class="stocks-view__suggestions">
             <li
-              v-for="candidate in filteredStockCandidates"
-              :key="candidate.symbol"
+              v-for="candidate in filteredCandidates"
+              :key="`${candidate.type}-${candidate.symbol}`"
               class="stocks-view__suggestion-item"
-              @click="selectStockCandidate(candidate.symbol)"
+              @click="selectCandidate(candidate)"
             >
-              {{ candidate.symbol }} / {{ candidate.name }}
+              {{ candidate.name }}
             </li>
           </ul>
-          <select v-model="instrumentTypeInput" required>
-            <option value="stock">個別株（株）</option>
-            <option value="fund">投資信託（口）</option>
-            <option value="etf">ETF（口）</option>
-          </select>
-          <select v-model="securitiesAccountIdInput" required>
-            <option value="">証券口座を選択（NISA/特定）</option>
+          <select @change="onSelectSecuritiesAccount(($event.target as HTMLSelectElement).value)">
+            <option value="">証券口座から設定（任意）</option>
             <option v-for="acc in activeSecuritiesAccounts" :key="acc.id" :value="acc.id">
-              {{ acc.broker_name }} / {{ taxCategoryLabel[acc.tax_category] }}
+              {{ acc.broker_name }} / {{ acc.account_name }}
             </option>
           </select>
+          <input v-model="accountTypeInput" type="text" placeholder="口座区分（例: NISA 成長投資枠）" required />
           <input
-            v-model.number="sharesInput"
+            v-model.number="quantityInput"
             type="number"
             step="0.0001"
             min="0"
-            :placeholder="`保有数量（${quantityUnit(instrumentTypeInput)}）`"
+            :placeholder="`保有数量（${quantityUnit(typeInput)}）`"
             required
           />
           <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
+          <input
+            v-if="typeInput === 'fund'"
+            v-model.number="currentPriceInput"
+            type="number"
+            step="0.0001"
+            min="0"
+            placeholder="現在価格（投資信託/ETFは手動）"
+          />
           <div style="display: flex; gap: 0.5rem;">
             <button type="submit">登録する</button>
             <button type="button" @click="showAddModal = false">閉じる</button>
@@ -238,19 +263,18 @@ onMounted(() => {
     </div>
 
     <section class="card stocks-view__table-wrap">
-      <h3 style="margin-top: 0;">保有一覧</h3>
+      <h3 style="margin-top: 0;">株式</h3>
       <p v-if="loading">読み込み中...</p>
-      <p v-else-if="tableRows.length === 0">銘柄がありません。</p>
+      <p v-else-if="stockRows.length === 0">株式はありません。</p>
 
       <table v-else class="stocks-view__table">
         <thead>
           <tr>
-            <th>取引</th>
-            <th>銘柄</th>
+            <th>銘柄名</th>
             <th>口座区分</th>
             <th>保有数量</th>
             <th>平均取得価額</th>
-            <th>基準価額</th>
+            <th>現在価格</th>
             <th>評価額</th>
             <th>評価損益</th>
             <th>評価損益率</th>
@@ -258,16 +282,49 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in tableRows" :key="row.id">
-            <td>{{ row.tradeLabel }}</td>
-            <td>{{ row.symbol }}</td>
-            <td>{{ resolveAccountLabel(row) }}</td>
-            <td>{{ formatNumber(row.shares, 4) }}{{ quantityUnit(row.instrumentType) }}</td>
-            <td>{{ formatNumber(row.averagePrice, 2) }}</td>
-            <td>{{ formatNumber(row.currentPrice, 2) }}</td>
-            <td>{{ formatNumber(row.evaluationAmount, 0) }}</td>
-            <td :class="profitClass(row.profitLoss)">{{ formatNumber(row.profitLoss, 0) }}</td>
-            <td :class="profitClass(row.profitLossRate)">{{ formatNumber(row.profitLossRate, 2) }}%</td>
+          <tr v-for="row in stockRows" :key="row.id">
+            <td>{{ row.name }}</td>
+            <td>{{ row.account_type }}</td>
+            <td>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</td>
+            <td>{{ formatNumber(Number(row.average_price), 2) }}</td>
+            <td>{{ formatNumber(Number(row.current_price), 2) }}</td>
+            <td>{{ formatNumber(Number(row.evaluation_amount), 0) }}</td>
+            <td :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}</td>
+            <td :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</td>
+            <td><button @click="handleDelete(row.id)">削除</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card stocks-view__table-wrap">
+      <h3 style="margin-top: 0;">投資信託</h3>
+      <p v-if="loading">読み込み中...</p>
+      <p v-else-if="fundRows.length === 0">投資信託はありません。</p>
+      <table v-else class="stocks-view__table">
+        <thead>
+          <tr>
+            <th>銘柄名</th>
+            <th>口座区分</th>
+            <th>保有数量</th>
+            <th>平均取得価額</th>
+            <th>現在価格</th>
+            <th>評価額</th>
+            <th>評価損益</th>
+            <th>評価損益率</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in fundRows" :key="row.id">
+            <td>{{ row.name }}</td>
+            <td>{{ row.account_type }}</td>
+            <td>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</td>
+            <td>{{ formatNumber(Number(row.average_price), 2) }}</td>
+            <td>{{ formatNumber(Number(row.current_price), 2) }}</td>
+            <td>{{ formatNumber(Number(row.evaluation_amount), 0) }}</td>
+            <td :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}</td>
+            <td :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</td>
             <td><button @click="handleDelete(row.id)">削除</button></td>
           </tr>
         </tbody>
@@ -344,7 +401,7 @@ onMounted(() => {
 }
 
 .stocks-view__modal {
-  width: min(520px, 100%);
+  width: min(560px, 100%);
 }
 
 .stocks-view__suggestions {
@@ -376,7 +433,7 @@ onMounted(() => {
 .stocks-view__table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1080px;
+  min-width: 980px;
 }
 
 .stocks-view__table th,
@@ -391,10 +448,8 @@ onMounted(() => {
 .stocks-view__table td:nth-child(1),
 .stocks-view__table th:nth-child(2),
 .stocks-view__table td:nth-child(2),
-.stocks-view__table th:nth-child(3),
-.stocks-view__table td:nth-child(3),
-.stocks-view__table th:nth-child(10),
-.stocks-view__table td:nth-child(10) {
+.stocks-view__table th:nth-child(9),
+.stocks-view__table td:nth-child(9) {
   text-align: left;
 }
 
