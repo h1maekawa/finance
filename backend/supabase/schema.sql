@@ -213,6 +213,19 @@ create table if not exists public.notification_logs (
   error_message text,
   created_at timestamptz not null default now()
 );
+create table if not exists public.monthly_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  target_month date not null,
+  income_total bigint not null default 0,
+  expense_total bigint not null default 0,
+  net_total bigint not null default 0,
+  month_end_assets bigint not null default 0,
+  memo text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (household_id, target_month)
+);
 -- ------------------------------------------------------------
 -- UUID → text 型変換（既存テーブルに対する冪等マイグレーション）
 -- 新規 DB では CREATE TABLE IF NOT EXISTS で最初から text になるため影響なし
@@ -327,6 +340,7 @@ create index if not exists idx_investment_assets_notify_tp on public.investment_
 create index if not exists idx_stocks_user_symbol on public.stocks (user_id, symbol);
 create index if not exists idx_user_notification_channels_user on public.user_notification_channels (user_id, provider, is_active);
 create index if not exists idx_notification_logs_user_created on public.notification_logs (user_id, created_at desc);
+create index if not exists idx_monthly_snapshots_household_month on public.monthly_snapshots (household_id, target_month desc);
 -- ------------------------------------------------------------
 -- Functions
 -- ------------------------------------------------------------
@@ -508,6 +522,11 @@ create trigger trg_user_notification_channels_timestamps before
 insert
   or
 update on public.user_notification_channels for each row execute function public.set_timestamps();
+drop trigger if exists trg_monthly_snapshots_timestamps on public.monthly_snapshots;
+create trigger trg_monthly_snapshots_timestamps before
+insert
+  or
+update on public.monthly_snapshots for each row execute function public.set_timestamps();
 -- ------------------------------------------------------------
 -- Row Level Security
 -- ------------------------------------------------------------
@@ -525,6 +544,7 @@ alter table public.investment_assets enable row level security;
 alter table public.stocks enable row level security;
 alter table public.user_notification_channels enable row level security;
 alter table public.notification_logs enable row level security;
+alter table public.monthly_snapshots enable row level security;
 -- profiles
 drop policy if exists profiles_select_own on public.profiles;
 create policy profiles_select_own on public.profiles for
@@ -623,3 +643,6 @@ delete using (user_id = (auth.jwt()->>'sub'));
 drop policy if exists notification_logs_select_own on public.notification_logs;
 create policy notification_logs_select_own on public.notification_logs for
 select using (user_id = (auth.jwt()->>'sub'));
+-- monthly_snapshots
+drop policy if exists monthly_snapshots_all_member on public.monthly_snapshots;
+create policy monthly_snapshots_all_member on public.monthly_snapshots for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));

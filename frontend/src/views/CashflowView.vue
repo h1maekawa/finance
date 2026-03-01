@@ -6,12 +6,16 @@ import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
 import { useMonthlySummary } from '@/composables/useMonthlySummary'
 import { useCreditCards } from '@/composables/useCreditCards'
+import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
+import { useMonthlySnapshots } from '@/composables/useMonthlySnapshots'
 import { sessionStore } from '@/stores/session'
 import type { TransactionKind } from '@/types/db'
 
 const { currentHouseholdId } = useHousehold()
 const { categories, incomeCategories, expenseCategories } = useCategories(() => currentHouseholdId.value)
 const { activeCards } = useCreditCards(() => currentHouseholdId.value)
+const { totalAssets } = useAssetBreakdown(() => currentHouseholdId.value)
+const { snapshots, saveSnapshot } = useMonthlySnapshots(() => currentHouseholdId.value)
 const {
   transactions,
   selectedMonth,
@@ -25,12 +29,18 @@ const summary = useMonthlySummary(
   (categoryId) => categories.value.find((c) => c.id === categoryId)?.name ?? '未分類',
 )
 
+const netTotal = computed(() => totalIncome.value - totalExpense.value)
+const snapshotSavedMessage = ref('')
+const snapshotErrorMessage = ref('')
+
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
   set: (value: string) => {
     selectedMonth.value = new Date(`${value}-01T00:00:00`)
   },
 })
+
+const targetMonth = computed(() => `${monthInput.value}-01`)
 
 const form = ref({
   kind: 'expense' as TransactionKind,
@@ -93,6 +103,27 @@ async function submitTransaction() {
     formError.value = error instanceof Error ? error.message : '登録に失敗しました。'
   }
 }
+
+async function saveMonthlySnapshot() {
+  snapshotSavedMessage.value = ''
+  snapshotErrorMessage.value = ''
+
+  try {
+    await saveSnapshot({
+      target_month: targetMonth.value,
+      income_total: totalIncome.value,
+      expense_total: totalExpense.value,
+      net_total: netTotal.value,
+      month_end_assets: totalAssets.value,
+    })
+    snapshotSavedMessage.value = '月次データを保存しました。'
+    setTimeout(() => {
+      snapshotSavedMessage.value = ''
+    }, 1600)
+  } catch (error) {
+    snapshotErrorMessage.value = error instanceof Error ? error.message : '月次データ保存に失敗しました。'
+  }
+}
 </script>
 
 <template>
@@ -115,6 +146,54 @@ async function submitTransaction() {
         <h2 class="cashflow-view__summary-label">今月の支出合計</h2>
         <p class="cashflow-view__summary-value cashflow-view__summary-value--expense">{{ totalExpense.toLocaleString() }}円</p>
       </article>
+    </section>
+
+    <section class="cashflow-view__summary-grid">
+      <article class="cashflow-view__summary-card">
+        <h2 class="cashflow-view__summary-label">今月の収支</h2>
+        <p class="cashflow-view__summary-value" :class="netTotal >= 0 ? 'cashflow-view__summary-value--income' : 'cashflow-view__summary-value--expense'">
+          {{ netTotal.toLocaleString() }}円
+        </p>
+      </article>
+      <article class="cashflow-view__summary-card">
+        <h2 class="cashflow-view__summary-label">月末資産額（記録用）</h2>
+        <p class="cashflow-view__summary-value">{{ totalAssets.toLocaleString() }}円</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h3 style="margin-top: 0;">月次記録</h3>
+      <p style="margin-top: 0; color: #64748b;">選択中の月（{{ monthInput }}）の収支・資産額を履歴として保存します。</p>
+      <button @click="saveMonthlySnapshot">この月を保存</button>
+      <p v-if="snapshotSavedMessage" style="margin: 0.5rem 0 0; color: #2563eb;">{{ snapshotSavedMessage }}</p>
+      <p v-if="snapshotErrorMessage" style="margin: 0.5rem 0 0; color: #dc2626;">{{ snapshotErrorMessage }}</p>
+    </section>
+
+    <section class="card">
+      <h3 style="margin-top: 0;">月次履歴</h3>
+      <p v-if="snapshots.length === 0" style="margin: 0; color: #6b7280;">まだ月次履歴がありません。</p>
+      <div v-else style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; min-width: 720px;">
+          <thead>
+            <tr>
+              <th align="left">対象月</th>
+              <th align="left">収入</th>
+              <th align="left">支出</th>
+              <th align="left">収支</th>
+              <th align="left">月末資産額</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in snapshots" :key="row.id">
+              <td>{{ row.target_month.slice(0, 7) }}</td>
+              <td>{{ Number(row.income_total).toLocaleString() }} 円</td>
+              <td>{{ Number(row.expense_total).toLocaleString() }} 円</td>
+              <td>{{ Number(row.net_total).toLocaleString() }} 円</td>
+              <td>{{ Number(row.month_end_assets).toLocaleString() }} 円</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">

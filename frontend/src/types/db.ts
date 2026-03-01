@@ -89,3 +89,16 @@ export type Stock = {
   profit_loss_rate: number
   updated_at: string
 }
+
+export type MonthlySnapshot = {
+  id: string
+  household_id: string
+  target_month: string
+  income_total: number
+  expense_total: number
+  net_total: number
+  month_end_assets: number
+  memo: string | null
+  created_at: string
+  updated_at: string
+}
