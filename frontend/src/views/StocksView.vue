@@ -201,7 +201,7 @@ function onSelectSecuritiesAccount(accountId: string) {
 async function handleUpdatePrices() {
   formError.value = ''
   try {
-    await updatePrices()
+    await updatePrices(usdJpyRate.value)
   } catch (error) {
     formError.value = error instanceof Error
       ? `価格同期に失敗しました。(${error.message})`

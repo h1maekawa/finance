@@ -206,7 +206,7 @@ export function useStocks() {
     return `${symbol.trim().toUpperCase()}::${name.trim()}`
   }
 
-  async function updatePrices() {
+  async function updatePrices(usdJpyRate = 150) {
     updatingPrices.value = true
     updateErrors.value = []
     try {
@@ -232,10 +232,12 @@ export function useStocks() {
 
         const quantity = Number(stock.quantity ?? 0)
         const averagePrice = Number(stock.average_price ?? 0)
-        const evaluationAmount = currentPrice * quantity
-        const profitLoss = (currentPrice - averagePrice) * quantity
-        const profitLossRate = averagePrice > 0
-          ? ((currentPrice - averagePrice) / averagePrice) * 100
+        const fx = Math.max(1, Number(usdJpyRate || 0))
+        const evaluationAmount = currentPrice * fx * quantity
+        const costAmount = averagePrice * quantity
+        const profitLossYen = evaluationAmount - costAmount
+        const profitLossRate = costAmount > 0
+          ? (profitLossYen / costAmount) * 100
           : 0
 
         const { error } = await supabase
@@ -243,7 +245,7 @@ export function useStocks() {
           .update({
             current_price: currentPrice,
             evaluation_amount: evaluationAmount,
-            profit_loss: profitLoss,
+            profit_loss: profitLossYen,
             profit_loss_rate: profitLossRate,
             updated_at: new Date().toISOString(),
           })
