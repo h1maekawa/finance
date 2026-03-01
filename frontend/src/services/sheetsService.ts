@@ -14,6 +14,11 @@ type AppendPayload = {
   quantity: number
 }
 
+type DeletePayload = {
+  symbol: string
+  name: string
+}
+
 type RowsResponse = {
   rows: SheetInvestmentRow[]
 }
@@ -65,4 +70,29 @@ export async function fetchInvestmentRowsFromSheet(): Promise<SheetInvestmentRow
     throw new Error(`Sheets fetch failed: ${(json as { error?: string }).error}`)
   }
   return json.rows ?? []
+}
+
+export async function deleteInvestmentFromSheet(payload: DeletePayload): Promise<void> {
+  const { uid } = await getAuthContext()
+  const response = await fetch('/api/gas/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      uid,
+      symbol: payload.symbol,
+      name: payload.name,
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Sheets delete failed: ${response.status} ${text}`)
+  }
+
+  const json = await response.json() as { error?: string }
+  if (json.error) {
+    throw new Error(`Sheets delete failed: ${json.error}`)
+  }
 }

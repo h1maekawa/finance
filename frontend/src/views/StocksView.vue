@@ -115,6 +115,12 @@ function profitClass(value: number) {
   return ''
 }
 
+function currentValueText(type: 'stock' | 'fund', value: number) {
+  return type === 'stock'
+    ? `${formatNumber(Number(value), 2)}USドル`
+    : `${formatNumber(Number(value), 2)}円`
+}
+
 function toggleDetail(id: string) {
   expandedRows.value[id] = !expandedRows.value[id]
 }
@@ -367,11 +373,48 @@ watch(
             </div>
           </div>
           <div v-if="isDetailOpen(row.id)" class="stocks-view__detail">
-            <p>口座区分: {{ row.account_type }}</p>
-            <p>保有数量: {{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
-            <p>平均取得価額: {{ formatNumber(Number(row.average_price), 2) }}</p>
-            <p>評価額: {{ formatNumber(Number(row.evaluation_amount), 0) }}</p>
-            <p :class="profitClass(Number(row.profit_loss))">評価損益: {{ formatNumber(Number(row.profit_loss), 0) }}</p>
+            <div class="stocks-view__detail-grid">
+              <div>
+                <p class="stocks-view__detail-label">銘柄</p>
+                <p>{{ row.name }} / {{ row.symbol }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">口座区分</p>
+                <p>{{ row.account_type }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">保有数量</p>
+                <p>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">平均取得価額</p>
+                <p>{{ formatNumber(Number(row.average_price), 2) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">現在値</p>
+                <p>{{ currentValueText(row.type, Number(row.current_price)) }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価額</p>
+                <p>{{ formatNumber(Number(row.evaluation_amount), 0) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価損益</p>
+                <p :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価損益率</p>
+                <p :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</p>
+              </div>
+            </div>
+            <div class="stocks-view__trade-row">
+              <span class="stocks-view__detail-label">取引</span>
+              <div class="stocks-view__trade-badges">
+                <span class="stocks-view__badge">買い</span>
+                <span class="stocks-view__badge">積立</span>
+                <span class="stocks-view__badge">売り</span>
+              </div>
+            </div>
             <button type="button" class="stocks-view__danger-btn" @click="handleDelete(row.id)">削除</button>
           </div>
         </li>
@@ -409,12 +452,48 @@ watch(
             </div>
           </div>
           <div v-if="isDetailOpen(row.id)" class="stocks-view__detail">
-            <p>口座区分: {{ row.account_type }}</p>
-            <p>保有数量: {{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
-            <p>平均取得価額: {{ formatNumber(Number(row.average_price), 2) }}</p>
-            <p>現在価格: {{ formatNumber(Number(row.current_price), 2) }}</p>
-            <p>評価額: {{ formatNumber(Number(row.evaluation_amount), 0) }}</p>
-            <p :class="profitClass(Number(row.profit_loss))">評価損益: {{ formatNumber(Number(row.profit_loss), 0) }}</p>
+            <div class="stocks-view__detail-grid">
+              <div>
+                <p class="stocks-view__detail-label">銘柄</p>
+                <p>{{ row.name }} / {{ row.symbol }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">口座区分</p>
+                <p>{{ row.account_type }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">保有数量</p>
+                <p>{{ formatNumber(Number(row.quantity), 4) }}{{ quantityUnit(row.type) }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">平均取得価額</p>
+                <p>{{ formatNumber(Number(row.average_price), 2) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">現在値</p>
+                <p>{{ currentValueText(row.type, Number(row.current_price)) }}</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価額</p>
+                <p>{{ formatNumber(Number(row.evaluation_amount), 0) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価損益</p>
+                <p :class="profitClass(Number(row.profit_loss))">{{ formatNumber(Number(row.profit_loss), 0) }}円</p>
+              </div>
+              <div>
+                <p class="stocks-view__detail-label">評価損益率</p>
+                <p :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</p>
+              </div>
+            </div>
+            <div class="stocks-view__trade-row">
+              <span class="stocks-view__detail-label">取引</span>
+              <div class="stocks-view__trade-badges">
+                <span class="stocks-view__badge">買い</span>
+                <span class="stocks-view__badge">積立</span>
+                <span class="stocks-view__badge">売り</span>
+              </div>
+            </div>
             <button type="button" class="stocks-view__danger-btn" @click="handleDelete(row.id)">削除</button>
           </div>
         </li>
@@ -637,6 +716,41 @@ watch(
 .stocks-view__detail p {
   margin: 0;
   font-size: 0.92rem;
+}
+
+.stocks-view__detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+}
+
+.stocks-view__detail-label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.stocks-view__trade-row {
+  margin-top: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.stocks-view__trade-badges {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.stocks-view__badge {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #1e3a8a;
 }
 
 .stocks-view__danger-btn {

@@ -4,6 +4,7 @@ import { sessionStore } from '@/stores/session'
 import type { Stock } from '@/types/db'
 import {
   appendInvestmentToSheet,
+  deleteInvestmentFromSheet,
   fetchInvestmentRowsFromSheet,
   type SheetInvestmentRow,
 } from '@/services/sheetsService'
@@ -125,9 +126,26 @@ export function useStocks() {
   }
 
   async function deleteStock(id: string) {
+    const target = stocks.value.find((s) => s.id === id)
+    if (!target) {
+      throw new Error('対象データが見つかりません。')
+    }
+
     const { error } = await supabase.from('investments').delete().eq('id', id)
     if (error) throw error
     stocks.value = stocks.value.filter((s) => s.id !== id)
+
+    try {
+      await deleteInvestmentFromSheet({
+        symbol: target.symbol,
+        name: target.name,
+      })
+      await fetchSheetRows()
+    } catch (sheetDeleteError) {
+      sheetError.value = sheetDeleteError instanceof Error
+        ? sheetDeleteError.message
+        : 'Google Sheets の削除同期に失敗しました。'
+    }
   }
 
   async function updateFundPrice(id: string, nextCurrentPrice: number) {
