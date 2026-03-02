@@ -36,6 +36,10 @@ const monthEndAssets = computed(() => totalBalance.value + totalEvaluationAmount
 const snapshotSavedMessage = ref('')
 const snapshotErrorMessage = ref('')
 
+function formatYen(value: number) {
+  return `${Math.round(Number(value || 0)).toLocaleString()}円`
+}
+
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
   set: (value: string) => {
@@ -143,11 +147,11 @@ async function saveMonthlySnapshot() {
     <section class="cashflow-view__summary-grid">
       <article class="cashflow-view__summary-card">
         <h2 class="cashflow-view__summary-label">今月の収入合計</h2>
-        <p class="cashflow-view__summary-value cashflow-view__summary-value--income">{{ totalIncome.toLocaleString() }}円</p>
+        <p class="cashflow-view__summary-value cashflow-view__summary-value--income">{{ formatYen(totalIncome) }}</p>
       </article>
       <article class="cashflow-view__summary-card">
         <h2 class="cashflow-view__summary-label">今月の支出合計</h2>
-        <p class="cashflow-view__summary-value cashflow-view__summary-value--expense">{{ totalExpense.toLocaleString() }}円</p>
+        <p class="cashflow-view__summary-value cashflow-view__summary-value--expense">{{ formatYen(totalExpense) }}</p>
       </article>
     </section>
 
@@ -155,12 +159,12 @@ async function saveMonthlySnapshot() {
       <article class="cashflow-view__summary-card">
         <h2 class="cashflow-view__summary-label">今月の収支</h2>
         <p class="cashflow-view__summary-value" :class="netTotal >= 0 ? 'cashflow-view__summary-value--income' : 'cashflow-view__summary-value--expense'">
-          {{ netTotal.toLocaleString() }}円
+          {{ formatYen(netTotal) }}
         </p>
       </article>
       <article class="cashflow-view__summary-card">
         <h2 class="cashflow-view__summary-label">月末資産額（記録用）</h2>
-        <p class="cashflow-view__summary-value">{{ monthEndAssets.toLocaleString() }}円</p>
+        <p class="cashflow-view__summary-value">{{ formatYen(monthEndAssets) }}</p>
       </article>
     </section>
 
@@ -262,6 +266,9 @@ async function saveMonthlySnapshot() {
   margin: 0.35rem 0 0;
   font-size: 2rem;
   font-weight: 800;
+  white-space: nowrap;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .cashflow-view__summary-value--income {
