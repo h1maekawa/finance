@@ -213,7 +213,7 @@ async function saveMonthlySnapshot() {
         <input v-model.number="form.amount" type="number" min="1" placeholder="金額" />
         <input v-model="form.transaction_date" type="date" />
         <select v-if="form.kind === 'expense'" v-model="form.credit_card_id">
-          <option value="">支払い方法（現金/口座）</option>
+          <option value="">支払い方法（現金/口座/未登録）</option>
           <option v-for="card in activeCards" :key="card.id" :value="card.id">
             {{ card.card_name }}
           </option>

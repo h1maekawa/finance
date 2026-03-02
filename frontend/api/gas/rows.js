@@ -20,12 +20,17 @@ export default async function handler(req, res) {
     const secret = requiredEnv('GAS_SECRET')
 
     const uid = String(req.query?.uid ?? '').trim()
+    const type = String(req.query?.type ?? 'all').trim()
     if (!uid) {
       return sendJson(res, 400, { error: 'uid_required' })
+    }
+    if (!['stock', 'fund', 'all'].includes(type)) {
+      return sendJson(res, 400, { error: 'type_invalid' })
     }
 
     const query = new URLSearchParams({
       uid,
+      type,
       secret,
     })
     const gasResponse = await fetch(`${webAppUrl}?${query.toString()}`)

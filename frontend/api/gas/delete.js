@@ -20,10 +20,11 @@ export default async function handler(req, res) {
     const secret = requiredEnv('GAS_SECRET')
 
     const uid = String(req.body?.uid ?? '').trim()
+    const type = String(req.body?.type ?? '').trim()
     const symbol = String(req.body?.symbol ?? '').trim().toUpperCase()
     const name = String(req.body?.name ?? '').trim()
 
-    if (!uid || !symbol || !name) {
+    if (!uid || !['stock', 'fund'].includes(type) || !symbol || !name) {
       return sendJson(res, 400, { error: 'invalid_payload' })
     }
 
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         action: 'delete',
         uid,
+        type,
         symbol,
         name,
         secret,

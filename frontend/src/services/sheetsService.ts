@@ -15,12 +15,17 @@ export type SheetInvestmentRow = {
 }
 
 type AppendPayload = {
+  type: 'stock' | 'fund'
   symbol: string
   name: string
   quantity: number
+  averagePrice?: number
+  currentPrice?: number
+  evaluationAmount?: number
 }
 
 type DeletePayload = {
+  type: 'stock' | 'fund'
   symbol: string
   name: string
 }
@@ -63,9 +68,9 @@ export async function appendInvestmentToSheet(payload: AppendPayload): Promise<v
   }
 }
 
-export async function fetchInvestmentRowsFromSheet(): Promise<SheetInvestmentRow[]> {
+export async function fetchInvestmentRowsFromSheet(type: 'stock' | 'fund' | 'all' = 'all'): Promise<SheetInvestmentRow[]> {
   const { uid } = await getAuthContext()
-  const params = new URLSearchParams({ uid })
+  const params = new URLSearchParams({ uid, type })
   const response = await fetch(`/api/gas/rows?${params.toString()}`)
   if (!response.ok) {
     const text = await response.text()
@@ -87,6 +92,7 @@ export async function deleteInvestmentFromSheet(payload: DeletePayload): Promise
     },
     body: JSON.stringify({
       uid,
+      type: payload.type,
       symbol: payload.symbol,
       name: payload.name,
     }),

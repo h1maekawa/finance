@@ -232,6 +232,10 @@ async function handleSaveFundPrice(id: string) {
   }
 }
 
+function handleFetchSheetRows() {
+  void fetchSheetRows('all')
+}
+
 onMounted(() => {
   void fetchStocks()
   autoTimer = window.setInterval(() => {
@@ -283,7 +287,7 @@ watch(
     <section class="card stocks-view__table-wrap">
       <div class="stocks-view__sheet-head">
         <h3 style="margin: 0;">Google Sheets 連携データ</h3>
-        <button :disabled="sheetLoading" @click="fetchSheetRows">
+        <button :disabled="sheetLoading" @click="handleFetchSheetRows">
           {{ sheetLoading ? '取得中...' : '再取得' }}
         </button>
       </div>

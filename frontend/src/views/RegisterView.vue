@@ -67,6 +67,19 @@ const cardNameCandidates = [
   'セゾンカードインターナショナル',
   '三菱UFJカード',
   'アメリカン・エキスプレス・グリーン',
+  'PayPay',
+  '楽天ペイ',
+  'd払い',
+  'au PAY',
+  'メルペイ',
+  'ファミペイ',
+  'LINE Pay',
+  '交通系IC（Suica/PASMO）',
+  'iD',
+  'QUICPay',
+  'WAON',
+  'nanaco',
+  '楽天Edy',
 ]
 
 const securitiesBrokerCandidates = [
@@ -136,7 +149,7 @@ async function handleAdd() {
 async function handleAddCard() {
   cardErrorMessage.value = ''
   if (!cardNameInput.value.trim()) {
-    cardErrorMessage.value = 'カード名を入力してください。'
+    cardErrorMessage.value = '決済手段名を入力してください。'
     return
   }
 
@@ -148,7 +161,7 @@ async function handleAddCard() {
     cardNameInput.value = ''
     showCardModal.value = false
   } catch (error) {
-    cardErrorMessage.value = error instanceof Error ? error.message : 'カード登録に失敗しました。'
+    cardErrorMessage.value = error instanceof Error ? error.message : '決済手段登録に失敗しました。'
   }
 }
 
@@ -197,7 +210,7 @@ function cancelEditCard() {
 async function saveEditCard(id: string) {
   cardErrorMessage.value = ''
   if (!editCardName.value.trim()) {
-    cardErrorMessage.value = 'カード名を入力してください。'
+    cardErrorMessage.value = '決済手段名を入力してください。'
     return
   }
 
@@ -205,7 +218,7 @@ async function saveEditCard(id: string) {
     await updateCreditCard(id, { card_name: editCardName.value })
     editingCardId.value = null
   } catch (error) {
-    cardErrorMessage.value = error instanceof Error ? error.message : 'カード更新に失敗しました。'
+    cardErrorMessage.value = error instanceof Error ? error.message : '決済手段更新に失敗しました。'
   }
 }
 
@@ -215,7 +228,7 @@ async function removeCard(id: string) {
   try {
     await deleteCreditCard(id)
   } catch (error) {
-    cardErrorMessage.value = error instanceof Error ? error.message : 'カード削除に失敗しました。'
+    cardErrorMessage.value = error instanceof Error ? error.message : '決済手段削除に失敗しました。'
   }
 }
 
@@ -293,10 +306,10 @@ async function removeSecuritiesAccount(id: string) {
   <main class="register-view">
     <section class="card register-view__hero">
       <h2 class="register-view__title">登録</h2>
-      <p class="register-view__desc">口座とクレジットカードの新規登録はこちらから行います。</p>
+      <p class="register-view__desc">口座と決済手段（カード・電子マネー・QR決済）の登録を行います。</p>
       <div class="register-view__hero-actions">
         <button type="button" class="register-view__btn" @click="showAddModal = true">口座を登録</button>
-        <button type="button" class="register-view__btn" @click="showCardModal = true">カードを登録</button>
+        <button type="button" class="register-view__btn" @click="showCardModal = true">決済手段を登録</button>
         <button type="button" class="register-view__btn" @click="showSecuritiesModal = true">証券口座を登録</button>
       </div>
       <p v-if="errorMessage" class="register-view__error">{{ errorMessage }}</p>
@@ -332,8 +345,8 @@ async function removeSecuritiesAccount(id: string) {
     </section>
 
     <section class="card">
-      <h3 class="register-view__sub-title">登録済みクレジットカード</h3>
-      <p v-if="creditCards.length === 0" class="register-view__empty">まだカードが登録されていません</p>
+      <h3 class="register-view__sub-title">登録済み決済手段</h3>
+      <p v-if="creditCards.length === 0" class="register-view__empty">まだ決済手段が登録されていません</p>
       <ul v-else class="register-view__list">
         <li v-for="card in creditCards" :key="card.id" class="register-view__item">
           <template v-if="editingCardId === card.id">
@@ -425,12 +438,12 @@ async function removeSecuritiesAccount(id: string) {
 
     <div v-if="showCardModal" class="register-view__modal-overlay" @click.self="showCardModal = false">
       <section class="register-view__modal card">
-        <h3 class="register-view__sub-title">クレジットカードを追加</h3>
+        <h3 class="register-view__sub-title">決済手段を追加</h3>
         <form class="register-view__form" @submit.prevent="handleAddCard">
           <input
             v-model="cardNameInput"
             type="text"
-            placeholder="カード名（例：楽天カード）"
+            placeholder="決済手段名（例：楽天カード / PayPay / Suica）"
             required
           />
           <ul v-if="filteredCardCandidates.length > 0" class="register-view__suggestions">

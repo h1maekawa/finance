@@ -19,12 +19,16 @@ export default async function handler(req, res) {
     const webAppUrl = requiredEnv('GAS_WEBAPP_URL')
     const secret = requiredEnv('GAS_SECRET')
 
+    const type = String(req.body?.type ?? '').trim()
     const symbol = String(req.body?.symbol ?? '').trim().toUpperCase()
     const name = String(req.body?.name ?? '').trim()
     const quantity = Number(req.body?.quantity ?? 0)
+    const averagePrice = Number(req.body?.averagePrice ?? 0)
+    const currentPrice = Number(req.body?.currentPrice ?? 0)
+    const evaluationAmount = Number(req.body?.evaluationAmount ?? 0)
     const uid = String(req.body?.uid ?? '').trim()
 
-    if (!symbol || !name || !uid || !Number.isFinite(quantity) || quantity < 0) {
+    if (!['stock', 'fund'].includes(type) || !symbol || !name || !uid || !Number.isFinite(quantity) || quantity < 0) {
       return sendJson(res, 400, { error: 'invalid_payload' })
     }
 
@@ -32,9 +36,14 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
+        action: 'append',
+        type,
         symbol,
         name,
         quantity,
+        averagePrice,
+        currentPrice,
+        evaluationAmount,
         uid,
         secret,
       }),

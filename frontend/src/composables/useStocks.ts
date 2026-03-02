@@ -113,12 +113,16 @@ export function useStocks() {
     syncingSheet.value = true
     try {
       await appendInvestmentToSheet({
+        type: payload.type,
         symbol: payload.symbol,
         name: payload.name,
         quantity: payload.quantity,
+        averagePrice: payload.average_price,
+        currentPrice: payload.current_price,
+        evaluationAmount: payload.evaluation_amount,
       })
       sheetError.value = ''
-      await fetchSheetRows()
+      await fetchSheetRows('all')
     } catch (sheetSyncError) {
       sheetError.value = sheetSyncError instanceof Error
         ? sheetSyncError.message
@@ -142,10 +146,11 @@ export function useStocks() {
 
     try {
       await deleteInvestmentFromSheet({
+        type: target.type,
         symbol: target.symbol,
         name: target.name,
       })
-      await fetchSheetRows()
+      await fetchSheetRows('all')
     } catch (sheetDeleteError) {
       sheetError.value = sheetDeleteError instanceof Error
         ? sheetDeleteError.message
@@ -187,11 +192,13 @@ export function useStocks() {
     await fetchStocks()
   }
 
-  async function fetchSheetRows() {
+  async function fetchSheetRows(type: 'stock' | 'fund' | 'all' = 'all') {
     sheetLoading.value = true
     try {
-      const rows = await fetchInvestmentRowsFromSheet()
-      sheetRows.value = rows
+      const rows = await fetchInvestmentRowsFromSheet(type)
+      if (type === 'all') {
+        sheetRows.value = rows
+      }
       sheetError.value = ''
       return rows
     } catch (error) {
@@ -210,7 +217,7 @@ export function useStocks() {
     updatingPrices.value = true
     updateErrors.value = []
     try {
-      const rows = await fetchSheetRows()
+      const rows = await fetchSheetRows('stock')
       const rowMap = new Map<string, SheetInvestmentRow>()
       for (const row of rows) {
         rowMap.set(buildSheetKey(row.symbol, row.name), row)
@@ -288,7 +295,7 @@ export function useStocks() {
         return
       }
       void fetchStocks()
-      void fetchSheetRows()
+      void fetchSheetRows('all')
     },
     { immediate: true },
   )
