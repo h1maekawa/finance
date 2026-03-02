@@ -472,11 +472,7 @@ watch(
           <div class="stocks-view__item-main">
             <div>
               <p class="stocks-view__metric-label">現在価格</p>
-              <div class="stocks-view__fund-price-cell">
-                <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
-                <input v-model.number="fundEvaluationInputs[row.id]" type="number" step="1" min="0" placeholder="評価額" />
-                <button type="button" @click="handleSaveFundPrice(row.id)">保存</button>
-              </div>
+              <p class="stocks-view__metric-value">{{ currentValueText(row.type, Number(row.current_price)) }}</p>
             </div>
             <div>
               <p class="stocks-view__metric-label">評価損益率</p>
@@ -519,6 +515,17 @@ watch(
                 <p class="stocks-view__detail-label">評価損益率</p>
                 <p :class="profitClass(Number(row.profit_loss_rate))">{{ formatNumber(Number(row.profit_loss_rate), 2) }}%</p>
               </div>
+            </div>
+            <div class="stocks-view__fund-edit">
+              <label>
+                <span class="stocks-view__detail-label">現在価格（円）</span>
+                <input v-model.number="fundPriceInputs[row.id]" type="number" step="0.0001" min="0" />
+              </label>
+              <label>
+                <span class="stocks-view__detail-label">評価額（円）</span>
+                <input v-model.number="fundEvaluationInputs[row.id]" type="number" step="1" min="0" />
+              </label>
+              <button type="button" @click="handleSaveFundPrice(row.id)">保存</button>
             </div>
             <div class="stocks-view__trade-row">
               <span class="stocks-view__detail-label">取引</span>
@@ -797,6 +804,29 @@ watch(
   border-radius: 999px;
   background: #eef2ff;
   color: #1e3a8a;
+}
+
+.stocks-view__fund-edit {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.stocks-view__fund-edit label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .stocks-view__detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stocks-view__fund-edit {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stocks-view__danger-btn {
