@@ -18,5 +18,5 @@ npm run dev
 ## GAS連携
 Gmailから三井住友カード・楽天カードの通知をGoogleスプレッドシートへ自動保存するGASは以下にあります。
 
-- `/Users/maekawahiroyuki/finance-site-1/finance-app/gas/Code.gs`
+- `/Users/maekawahiroyuki/finance-site-1/finance-app/gas/InvestmentApi.gs`
 - `/Users/maekawahiroyuki/finance-site-1/finance-app/gas/README.md`
