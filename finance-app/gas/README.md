@@ -8,7 +8,7 @@
 
 ## 2. 抽出対象メール
 - 三井住友カード
-  - ラベル: `三井住友クレジット`
+  - ラベル: `三井住友オリーブ`
   - `from:statement@vpass.ne.jp`
   - 未読のみ（`is:unread`）
 - 楽天カード
@@ -25,7 +25,8 @@
 - `個別投資_PayPay`
 - `_processed_ids_cards`（重複防止ログ、非表示）
 
-`InvestmentApi.gs`の`CARD_SHEET_CONFIGS`と`EXPENSE_SHEET_NAMES`を編集すると、ラベル名・送信元・反映先タブ名を変更できます。
+`InvestmentApi.gs`の`TARGET_YEAR_MONTH`を変更すると対象月を切り替えできます（例: `2026-03`）。
+`CARD_SHEET_CONFIGS`と`EXPENSE_SHEET_NAMES`を編集すると、ラベル名・送信元・反映先タブ名を変更できます。
 
 ## 4. 実行手順
 1. `importCardNoticesToInvestmentSpreadsheet`を手動実行して認可

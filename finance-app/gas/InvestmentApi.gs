@@ -4,6 +4,7 @@ const STOCK_SHEET_NAME = 'stocks'
 const FUND_SHEET_NAME = 'funds'
 const APP_SECRET = 'YOUR_LONG_RANDOM_SECRET'
 const CARD_IMPORT_UID = 'system'
+const TARGET_YEAR_MONTH = '2026-03'
 const EXPENSE_HEADERS = ['日時', '金額', '店舗', 'カテゴリ', '支払手段', 'source', 'messageId', 'uid', 'dedupeKey', '作成日時']
 const EXPENSE_SHEET_NAMES = {
   rakuten: '個別投資_楽天',
@@ -19,16 +20,14 @@ const CARD_SHEET_CONFIGS = [
     labelName: '楽天カード',
     from: 'info@mail.rakuten-card.co.jp',
     paymentMethod: 'rakuten',
-    sheetName: EXPENSE_SHEET_NAMES.rakuten,
-    query: 'label:"楽天カード" from:info@mail.rakuten-card.co.jp is:unread'
+    sheetName: EXPENSE_SHEET_NAMES.rakuten
   },
   {
-    cardName: '三井住友',
-    labelName: '三井住友クレジット',
+    cardName: '三井住友オリーブ',
+    labelName: '三井住友オリーブ',
     from: 'statement@vpass.ne.jp',
     paymentMethod: 'mitsui',
-    sheetName: EXPENSE_SHEET_NAMES.mitsui,
-    query: 'label:"三井住友クレジット" from:statement@vpass.ne.jp is:unread'
+    sheetName: EXPENSE_SHEET_NAMES.mitsui
   }
 ]
 const CARD_PROCESSED_LOG_SHEET = '_processed_ids_cards'
@@ -301,7 +300,8 @@ function importCardNoticesToInvestmentSpreadsheet() {
 
   CARD_SHEET_CONFIGS.forEach((cfg) => {
     const sh = getExpenseSheetByMethod_(cfg.paymentMethod)
-    const threads = GmailApp.search(cfg.query, 0, 100)
+    const query = buildMonthlyCardQuery_(cfg)
+    const threads = GmailApp.search(query, 0, 100)
     const rows = []
     const logs = []
 
@@ -425,5 +425,20 @@ function createCardImportTrigger_() {
   const exists = ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === fn)
   if (!exists) {
     ScriptApp.newTrigger(fn).timeBased().everyMinutes(15).create()
+  }
+}
+
+function buildMonthlyCardQuery_(cfg) {
+  const { after, before } = getMonthDateRange_(TARGET_YEAR_MONTH)
+  return `label:"${cfg.labelName}" from:${cfg.from} is:unread after:${after} before:${before}`
+}
+
+function getMonthDateRange_(yyyyMm) {
+  const [y, m] = yyyyMm.split('-').map((v) => Number(v))
+  const start = new Date(y, m - 1, 1)
+  const end = new Date(y, m, 1)
+  return {
+    after: Utilities.formatDate(start, Session.getScriptTimeZone(), 'yyyy/MM/dd'),
+    before: Utilities.formatDate(end, Session.getScriptTimeZone(), 'yyyy/MM/dd')
   }
 }
