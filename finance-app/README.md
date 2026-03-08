@@ -1,5 +1,22 @@
-# Vue 3 + Vite
+# finance-app
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue + Viteで作成した家計簿アプリです。
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## 機能
+- クレジット通知メール貼り付け解析（支出登録）
+- Gmail APIブラウザ連携でメール取込
+- 手動支出入力 / 手動収入入力
+- 月次収支履歴の自動保存（localStorage）
+- ダッシュボード（支払い方法内訳、カテゴリ棒グラフ、月次履歴）
+
+## 開発
+```bash
+npm install
+npm run dev
+```
+
+## GAS連携
+Gmailから三井住友カード・楽天カードの通知をGoogleスプレッドシートへ自動保存するGASは以下にあります。
+
+- `/Users/maekawahiroyuki/finance-site-1/finance-app/gas/Code.gs`
+- `/Users/maekawahiroyuki/finance-site-1/finance-app/gas/README.md`
