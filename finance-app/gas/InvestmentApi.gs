@@ -294,31 +294,42 @@ function doGet(e) {
 }
 
 function importCardNoticesToInvestmentSpreadsheet() {
+  importCardNoticesCore_({ unreadOnly: true, markRead: true })
+}
+
+// 既読メールも含めて対象月を一括取り込み（バックフィル用）
+function backfillCardNoticesForTargetMonth() {
+  importCardNoticesCore_({ unreadOnly: false, markRead: false })
+}
+
+function importCardNoticesCore_(options) {
+  const unreadOnly = Boolean(options?.unreadOnly)
+  const markRead = Boolean(options?.markRead)
   const logSheet = getOrCreateSheet_(CARD_PROCESSED_LOG_SHEET, ['dedupeKey', 'messageId', 'uid', 'cardName', 'processedAt'])
   logSheet.hideSheet()
   const processed = loadProcessedExpenseKeys_(logSheet)
 
   CARD_SHEET_CONFIGS.forEach((cfg) => {
     const sh = getExpenseSheetByMethod_(cfg.paymentMethod)
-    const query = buildMonthlyCardQuery_(cfg)
+    const query = buildMonthlyCardQuery_(cfg, unreadOnly)
     const threads = GmailApp.search(query, 0, 100)
     const rows = []
     const logs = []
 
     threads.forEach((thread) => {
       thread.getMessages().forEach((msg) => {
-        if (!msg.isUnread()) return
+        if (unreadOnly && !msg.isUnread()) return
         const id = msg.getId()
         const dedupeKey = buildExpenseDedupeKey_(CARD_IMPORT_UID, cfg.paymentMethod, 'gmail', id, '', 0, '', '')
         if (processed.has(dedupeKey) || hasExpenseDedupeKey_(sh, dedupeKey)) {
-          msg.markRead()
+          if (markRead) msg.markRead()
           return
         }
 
         const body = `${msg.getPlainBody() || ''}\n${msg.getBody() || ''}`
         const amount = extractAmountFromCardBody_(body)
         if (amount === null) {
-          msg.markRead()
+          if (markRead) msg.markRead()
           return
         }
 
@@ -336,7 +347,7 @@ function importCardNoticesToInvestmentSpreadsheet() {
         ])
         logs.push([dedupeKey, id, CARD_IMPORT_UID, cfg.cardName, new Date()])
         processed.add(dedupeKey)
-        msg.markRead()
+        if (markRead) msg.markRead()
       })
     })
 
@@ -428,9 +439,10 @@ function createCardImportTrigger_() {
   }
 }
 
-function buildMonthlyCardQuery_(cfg) {
+function buildMonthlyCardQuery_(cfg, unreadOnly) {
   const { after, before } = getMonthDateRange_(TARGET_YEAR_MONTH)
-  return `label:"${cfg.labelName}" from:${cfg.from} is:unread after:${after} before:${before}`
+  const unreadFilter = unreadOnly ? ' is:unread' : ''
+  return `label:"${cfg.labelName}" from:${cfg.from}${unreadFilter} after:${after} before:${before}`
 }
 
 function getMonthDateRange_(yyyyMm) {
