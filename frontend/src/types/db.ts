@@ -91,3 +91,20 @@ export type MonthlySnapshot = {
   created_at: string
   updated_at: string
 }
+
+export type EmailImportLog = {
+  id: string
+  household_id: string
+  user_id: string
+  gmail_message_id: string
+  card_type: 'smbc' | 'rakuten'
+  transaction_date: string
+  store_name: string
+  amount: number
+  category_id: string | null
+  credit_card_id: string | null
+  transaction_id: string | null
+  status: 'imported' | 'skipped' | 'error'
+  raw_subject: string | null
+  imported_at: string
+}

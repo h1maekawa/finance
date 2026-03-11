@@ -9,6 +9,7 @@ import StocksView from '@/views/StocksView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import LoginView from '@/views/LoginView.vue'
+import GmailImportView from '@/views/GmailImportView.vue'
 import { sessionStore } from '@/stores/session'
 
 const router = createRouter({
@@ -20,6 +21,7 @@ const router = createRouter({
     { path: '/accounts', component: AccountsView, meta: { requiresAuth: true } },
     { path: '/investments', component: StocksView, meta: { requiresAuth: true } },
     { path: '/cashflow', component: CashflowView, meta: { requiresAuth: true } },
+    { path: '/gmail-import', component: GmailImportView, meta: { requiresAuth: true } },
     { path: '/income', redirect: '/cashflow' },
     { path: '/expense', redirect: '/cashflow' },
     { path: '/register', component: RegisterView, meta: { requiresAuth: true } },

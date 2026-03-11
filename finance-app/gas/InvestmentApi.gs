@@ -90,7 +90,7 @@ function parseBody_(e) {
   }
 }
 
-function doPost(e) {
+function handleInvestmentAction(e) {
   try {
     const body = parseBody_(e)
     if (String(body.secret || '') !== APP_SECRET) return json({ error: 'unauthorized' })
