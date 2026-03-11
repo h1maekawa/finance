@@ -102,6 +102,8 @@ function processCardEmails({ sender, subjectKeyword, cardType, parser, supabaseU
   const query = `from:${sender} subject:"${subjectKeyword}" newer_than:7d`
   const threads = GmailApp.search(query)
 
+  const processedMonths = new Set()
+
   for (const thread of threads) {
     const messages = thread.getMessages()
     for (const message of messages) {
@@ -170,11 +172,20 @@ function processCardEmails({ sender, subjectKeyword, cardType, parser, supabaseU
         stats.imported++
         Logger.log(`取込成功: ${parsed.storeName} ${parsed.amount}円 (${parsed.date})`)
 
+        // 月次データの更新対象月を記録
+        const targetMonth = `${parsed.date.slice(0, 7)}-01`
+        processedMonths.add(targetMonth)
+
       } catch (e) {
         Logger.log(`エラー: ${messageId} - ${e.message}`)
         stats.errors++
       }
     }
+  }
+
+  // 取込があった月のみ月次データを再計算して更新
+  for (const month of processedMonths) {
+    upsertMonthlySnapshot(householdId, month, supabaseUrl, supabaseAnonKey)
   }
 
   return stats
@@ -423,3 +434,101 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify({ error: 'unknown_action' }))
     .setMimeType(ContentService.MimeType.JSON)
 }
+
+/**
+ * 月次データ（MonthlySnapshot）を再計算して更新
+ */
+function upsertMonthlySnapshot(householdId, targetMonth, supabaseUrl, supabaseAnonKey) {
+  try {
+    const startOfMonth = targetMonth
+    
+    // JSのDateで月末日を計算（指定月の翌月0日目＝当月末日）
+    const y = parseInt(startOfMonth.slice(0, 4), 10)
+    const m = parseInt(startOfMonth.slice(5, 7), 10)
+    const lastDayFunc = new Date(y, m, 0).getDate()
+    const endOfMonth = `${y}-${String(m).padStart(2, '0')}-${String(lastDayFunc).padStart(2, '0')}`
+
+    // 1. 指定月のすべてのtransactionsを取得して集計
+    const txUrl = `${supabaseUrl}/rest/v1/transactions?household_id=eq.${householdId}&transaction_date=gte.${startOfMonth}&transaction_date=lte.${endOfMonth}&select=kind,amount`
+    const txResponse = UrlFetchApp.fetch(txUrl, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      muteHttpExceptions: true
+    })
+    
+    let incomeTotal = 0
+    let expenseTotal = 0
+    const txData = JSON.parse(txResponse.getContentText()) || []
+    
+    for (const tx of txData) {
+      if (tx.kind === 'income') incomeTotal += Number(tx.amount || 0)
+      if (tx.kind === 'expense') expenseTotal += Number(tx.amount || 0)
+    }
+    const netTotal = incomeTotal - expenseTotal
+
+    // 2. 現在の預金口座残高と証券口座の評価額の合計を取得（月次保存用）
+    // （今回は口座残高は現在時点のものを取得します）
+    let assetsTotal = 0
+    
+    // bank_accounts
+    const baUrl = `${supabaseUrl}/rest/v1/bank_accounts?household_id=eq.${householdId}&select=balance`
+    const baResponse = UrlFetchApp.fetch(baUrl, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      muteHttpExceptions: true
+    })
+    const baData = JSON.parse(baResponse.getContentText()) || []
+    for (const ba of baData) {
+      assetsTotal += Number(ba.balance || 0)
+    }
+    
+    // 既存の月次データを取得してメモなどを引き継ぐ
+    const msUrl = `${supabaseUrl}/rest/v1/monthly_snapshots?household_id=eq.${householdId}&target_month=eq.${targetMonth}`
+    const msResponse = UrlFetchApp.fetch(msUrl, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Prefer': 'return=representation'
+      },
+      muteHttpExceptions: true
+    })
+    const msData = JSON.parse(msResponse.getContentText()) || []
+    const existingMemo = msData.length > 0 ? (msData[0].memo || null) : null
+
+    // 3. monthly_snapshots に Upsert
+    const upsertUrl = `${supabaseUrl}/rest/v1/monthly_snapshots`
+    const payload = {
+      household_id: householdId,
+      target_month: targetMonth,
+      income_total: incomeTotal,
+      expense_total: expenseTotal,
+      net_total: netTotal,
+      month_end_assets: assetsTotal, 
+      memo: existingMemo
+    }
+
+    UrlFetchApp.fetch(upsertUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    })
+
+    Logger.log(`月次データ更新成功: ${targetMonth} (収入:${incomeTotal}, 支出:${expenseTotal})`)
+  } catch (e) {
+    Logger.log(`月次データ更新エラー: ${targetMonth} - ${e.message}`)
+  }
+}
+
