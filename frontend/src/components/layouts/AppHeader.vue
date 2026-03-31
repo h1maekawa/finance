@@ -9,7 +9,7 @@ const router = useRouter()
 const { signOut } = useAuth()
 
 const navItems = [
-  { path: '/', label: 'ホーム', icon: '🏠' },
+  { path: '/dashboard', label: 'ホーム', icon: '🏠' },
   { path: '/goal', label: '目標', icon: '🎯' },
   { path: '/accounts', label: '口座', icon: '🏦' },
   { path: '/investments', label: '個別株', icon: '📊' },
@@ -20,12 +20,13 @@ const navItems = [
 
 const title = computed(() => {
   const map: Record<string, string> = {
-    '/': '資金形成ダッシュボード',
+    '/dashboard': '資金形成ダッシュボード',
     '/goal': '目標',
     '/accounts': '口座管理',
     '/investments': '個別株管理',
     '/cashflow': '収支管理',
-    '/register': '登録',
+    '/setup': '初期設定',
+    '/register': '初期設定',
     '/assets': '現預貯金',
     '/settings': '設定',
     '/categories': 'カテゴリ管理',

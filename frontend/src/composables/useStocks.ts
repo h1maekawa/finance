@@ -2,17 +2,17 @@ import { computed, ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { sessionStore } from '@/stores/session'
 import type { Stock } from '@/types/db'
-import {
-  appendInvestmentToSheet,
-  deleteInvestmentFromSheet,
-  fetchInvestmentRowsFromSheet,
-  type SheetInvestmentRow,
-} from '@/services/sheetsService'
+// import {
+//   appendInvestmentToSheet,
+//   deleteInvestmentFromSheet,
+//   fetchInvestmentRowsFromSheet,
+//   type SheetInvestmentRow,
+// } from '@/services/sheetsService'
 
 type StockInput = {
   symbol: string
   name: string
-  type: 'stock' | 'fund'
+  type: 'stock' | 'fund' | 'us_stock' | 'jp_stock' | 'etf'
   account_type?: string
   quantity: number
   average_price: number
@@ -25,10 +25,7 @@ export function useStocks() {
   const loading = ref(false)
   const updatingPrices = ref(false)
   const updateErrors = ref<string[]>([])
-  const syncingSheet = ref(false)
-  const sheetLoading = ref(false)
   const sheetError = ref('')
-  const sheetRows = ref<SheetInvestmentRow[]>([])
 
   const totalEvaluationAmount = computed(() =>
     stocks.value.reduce((sum, s) => sum + Number(s.evaluation_amount ?? 0), 0),
@@ -83,6 +80,13 @@ export function useStocks() {
     const averagePrice = Math.max(0, Number(input.average_price || 0))
     const currentPrice = Math.max(0, Number(input.current_price ?? averagePrice))
     const manualEvaluation = Math.max(0, Number(input.evaluation_amount ?? 0))
+    
+    // Type and symbol normalization
+    let type = input.type as any
+    if (type === 'stock') {
+        type = /^[0-9]{4}$/.test(input.symbol) ? 'jp_stock' : 'us_stock'
+    }
+
     const evaluationAmount = input.type === 'fund'
       ? manualEvaluation
       : currentPrice * quantity
@@ -94,7 +98,7 @@ export function useStocks() {
 
     const payload = {
       user_id: userId,
-      type: input.type,
+      type: type,
       symbol: input.symbol.trim().toUpperCase(),
       name: input.name.trim() || input.symbol.trim().toUpperCase(),
       account_type: input.account_type?.trim() || '未設定',
@@ -109,28 +113,6 @@ export function useStocks() {
     const { error } = await supabase.from('investments').insert(payload)
     if (error) throw error
 
-    // 既存機能を壊さないため、Sheets同期失敗でも登録自体は成功とする
-    syncingSheet.value = true
-    try {
-      await appendInvestmentToSheet({
-        type: payload.type,
-        symbol: payload.symbol,
-        name: payload.name,
-        quantity: payload.quantity,
-        averagePrice: payload.average_price,
-        currentPrice: payload.current_price,
-        evaluationAmount: payload.evaluation_amount,
-      })
-      sheetError.value = ''
-      await fetchSheetRows('all')
-    } catch (sheetSyncError) {
-      sheetError.value = sheetSyncError instanceof Error
-        ? sheetSyncError.message
-        : 'Google Sheets への同期に失敗しました。'
-    } finally {
-      syncingSheet.value = false
-    }
-
     await fetchStocks()
   }
 
@@ -143,18 +125,64 @@ export function useStocks() {
     const { error } = await supabase.from('investments').delete().eq('id', id)
     if (error) throw error
     stocks.value = stocks.value.filter((s) => s.id !== id)
+  }
+
+  async function fetchLivePrices() {
+    if (stocks.value.length === 0) return
+    updatingPrices.value = true
+    updateErrors.value = []
 
     try {
-      await deleteInvestmentFromSheet({
-        type: target.type,
-        symbol: target.symbol,
-        name: target.name,
+      const etfList = ['QQQ', 'VOO', 'SPY', 'VTI', 'IVV', 'EEM', 'GLD', 'TLT', 'VEA', 'VWO']
+      const payloadSymbols = stocks.value.map(s => {
+        let type = s.type as string
+        if (type === 'jp_stock' || type === 'us_stock' || type === 'etf' || type === 'fund') {
+            // ok
+        } else if (type === 'stock') {
+            type = /^[0-9]{4}$/.test(s.symbol) ? 'jp_stock' : 'us_stock'
+            if (etfList.includes(s.symbol.toUpperCase())) type = 'etf'
+        }
+        return { symbol: s.symbol, type: type }
       })
-      await fetchSheetRows('all')
-    } catch (sheetDeleteError) {
-      sheetError.value = sheetDeleteError instanceof Error
-        ? sheetDeleteError.message
-        : 'Google Sheets の削除同期に失敗しました。'
+
+      const response = await fetch('/api/prices/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbols: payloadSymbols })
+      })
+      const { results } = await response.json()
+
+      for (const res of results) {
+        if (res.error) {
+          updateErrors.value.push(`${res.symbol}: ${res.error}`)
+          continue
+        }
+
+        const stock = stocks.value.find(s => s.symbol.toUpperCase() === res.symbol.toUpperCase())
+        if (!stock) continue
+
+        const currentPriceJpy = res.currentPriceJpy || res.currentPrice
+        const quantity = Number(stock.quantity)
+        const averagePrice = Number(stock.average_price)
+        const evaluationAmount = Math.round(quantity * currentPriceJpy)
+        const profitLoss = evaluationAmount - Math.round(quantity * averagePrice)
+        const profitLossRate = (profitLoss / (quantity * averagePrice)) * 100
+
+        await supabase.from('investments').update({
+          current_price: currentPriceJpy,
+          evaluation_amount: evaluationAmount,
+          profit_loss: profitLoss,
+          profit_loss_rate: profitLossRate,
+          updated_at: new Date().toISOString()
+        }).eq('id', stock.id)
+      }
+
+      await fetchStocks()
+    } catch (e) {
+      console.error('Fetch prices error:', e)
+      updateErrors.value.push('価格情報の取得に失敗しました。')
+    } finally {
+      updatingPrices.value = false
     }
   }
 
@@ -163,9 +191,9 @@ export function useStocks() {
     if (!row) {
       throw new Error('対象データが見つかりません。')
     }
-    if (row.type !== 'fund') {
-      throw new Error('投資信託のみ手動価格更新できます。')
-    }
+    // if (row.type !== 'fund') {
+    //   throw new Error('投資信託のみ手動価格更新できます。')
+    // }
 
     const currentPrice = Math.max(0, Number(nextCurrentPrice || 0))
     const averagePrice = Number(row.average_price ?? 0)
@@ -192,110 +220,21 @@ export function useStocks() {
     await fetchStocks()
   }
 
-  async function fetchSheetRows(type: 'stock' | 'fund' | 'all' = 'all') {
-    sheetLoading.value = true
-    try {
-      const rows = await fetchInvestmentRowsFromSheet(type)
-      if (type === 'all') {
-        sheetRows.value = rows
-      }
-      sheetError.value = ''
-      return rows
-    } catch (error) {
-      sheetError.value = error instanceof Error ? error.message : 'Google Sheets の取得に失敗しました。'
-      throw error
-    } finally {
-      sheetLoading.value = false
-    }
+  async function fetchSheetRows(_type: 'stock' | 'fund' | 'all' = 'all') {
+    return []
   }
 
-  function buildSheetKey(symbol: string, name: string) {
-    return `${symbol.trim().toUpperCase()}::${name.trim()}`
-  }
-
-  async function updatePrices(usdJpyRate = 150) {
-    updatingPrices.value = true
-    updateErrors.value = []
-    try {
-      const rows = await fetchSheetRows('stock')
-      const rowMap = new Map<string, SheetInvestmentRow>()
-      for (const row of rows) {
-        rowMap.set(buildSheetKey(row.symbol, row.name), row)
-      }
-
-      for (const stock of stocks.value.filter((s) => s.type === 'stock')) {
-        const key = buildSheetKey(stock.symbol, stock.name)
-        const matched = rowMap.get(key)
-        if (!matched) {
-          updateErrors.value.push(`${stock.symbol}: Sheetsに一致データがありません`)
-          continue
-        }
-
-        const quantity = Number(stock.quantity ?? 0)
-        const averagePrice = Number(stock.average_price ?? 0)
-        const fx = Math.max(1, Number(usdJpyRate || 0))
-
-        const sheetCurrentPriceUsd = Number(matched.currentPriceUsd ?? 0)
-        const sheetCurrentPriceYen = Number(matched.currentPriceYen ?? 0)
-        const sheetCurrentPrice = Number(matched.currentPrice ?? 0)
-        let currentPrice = 0
-        if (Number.isFinite(sheetCurrentPriceUsd) && sheetCurrentPriceUsd > 0) {
-          currentPrice = sheetCurrentPriceUsd
-        } else if (Number.isFinite(sheetCurrentPriceYen) && sheetCurrentPriceYen > 0) {
-          currentPrice = sheetCurrentPriceYen / fx
-        } else if (Number.isFinite(sheetCurrentPrice) && sheetCurrentPrice > 0) {
-          // スプシ側が円の現在値を返すケースを許容
-          currentPrice = sheetCurrentPrice > 1000 ? sheetCurrentPrice / fx : sheetCurrentPrice
-        } else {
-          updateErrors.value.push(`${stock.symbol}: 現在価格が不正です`)
-          continue
-        }
-
-        const sheetEvaluationAmount = Number(matched.evaluationAmount ?? 0)
-        const evaluationAmount = Number.isFinite(sheetEvaluationAmount) && sheetEvaluationAmount > 0
-          ? sheetEvaluationAmount
-          : currentPrice * fx * quantity
-        const costAmount = averagePrice * quantity
-        const sheetProfitLoss = Number(matched.profitLoss ?? NaN)
-        const sheetProfitLossRate = Number(matched.profitLossRate ?? NaN)
-        const profitLossYen = Number.isFinite(sheetProfitLoss)
-          ? sheetProfitLoss
-          : evaluationAmount - costAmount
-        const profitLossRate = Number.isFinite(sheetProfitLossRate)
-          ? sheetProfitLossRate
-          : (costAmount > 0 ? (profitLossYen / costAmount) * 100 : 0)
-
-        const { error } = await supabase
-          .from('investments')
-          .update({
-            current_price: currentPrice,
-            evaluation_amount: evaluationAmount,
-            profit_loss: profitLossYen,
-            profit_loss_rate: profitLossRate,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', stock.id)
-
-        if (error) {
-          updateErrors.value.push(`${stock.symbol}: ${error.message}`)
-        }
-      }
-
-      await fetchStocks()
-    } finally {
-      updatingPrices.value = false
-    }
+  async function updatePrices(_usdJpyRate = 150) {
+    await fetchLivePrices()
   }
 
   watch(
     () => sessionStore.user?.id,
     (userId) => {
       if (!userId) {
-        sheetRows.value = []
         return
       }
       void fetchStocks()
-      void fetchSheetRows('all')
     },
     { immediate: true },
   )
@@ -305,13 +244,11 @@ export function useStocks() {
     loading,
     updatingPrices,
     updateErrors,
-    syncingSheet,
-    sheetLoading,
     sheetError,
-    sheetRows,
     totalEvaluationAmount,
     fetchStocks,
     fetchSheetRows,
+    fetchLivePrices,
     addStock,
     deleteStock,
     updateFundPrice,

@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { firebaseAuth } from '@/lib/firebase'
 import type { EmailImportLog } from '@/types/db'
 
 export function useEmailImport(householdId: () => string | null) {
@@ -7,6 +8,21 @@ export function useEmailImport(householdId: () => string | null) {
     const importing = ref(false)
     const importMessage = ref('')
     const importError = ref('')
+    const isGmailLinked = ref(false)
+
+    async function checkGmailLinked() {
+        try {
+            const { data } = await supabase
+                .from('gmail_tokens')
+                .select('expires_at')
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle()
+            
+            isGmailLinked.value = !!data
+        } catch (e) {
+            isGmailLinked.value = false
+        }
+    }
 
     async function fetchImportLogs() {
         const hid = householdId()
@@ -29,18 +45,30 @@ export function useEmailImport(householdId: () => string | null) {
         importError.value = ''
 
         try {
-            const response = await fetch('/api/gas/gmail-import', {
+            const user = firebaseAuth.currentUser
+            if (!user) {
+                importError.value = 'ログインが必要です'
+                return
+            }
+
+            const idToken = await user.getIdToken()
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://gnpydpxozyovrbcgwvay.supabase.co'
+            
+            const response = await fetch(`${supabaseUrl}/functions/v1/gmail-import`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
             })
-            const json = await response.json() as { ok?: boolean; message?: string; error?: string }
+            const json = await response.json() as { results?: any[]; error?: string }
 
             if (!response.ok || json.error) {
                 importError.value = json.error || 'Gmail取込に失敗しました'
                 return
             }
 
-            importMessage.value = 'Gmail取込を開始しました。1〜2分後にページを更新すると反映されます。'
+            importMessage.value = `Gmail取込が完了しました (${json.results?.length ?? 0}件)`
             await fetchImportLogs()
         } catch (e) {
             importError.value = e instanceof Error ? e.message : 'ネットワークエラーが発生しました'
@@ -54,7 +82,9 @@ export function useEmailImport(householdId: () => string | null) {
         importing,
         importMessage,
         importError,
+        isGmailLinked,
         fetchImportLogs,
+        checkGmailLinked,
         triggerGmailImport,
     }
 }

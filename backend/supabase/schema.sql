@@ -261,6 +261,19 @@ create table if not exists public.monthly_snapshots (
   updated_at timestamptz not null default now(),
   unique (household_id, target_month)
 );
+create table if not exists public.household_invitations (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  inviter_user_id text not null,
+  email text not null,
+  token text not null unique,
+  role public.member_role not null default 'member',
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  created_at timestamptz not null default now(),
+  accepted_at timestamptz
+);
+create index if not exists idx_household_invitations_token on public.household_invitations (token);
+create index if not exists idx_household_invitations_household on public.household_invitations (household_id);
 -- ------------------------------------------------------------
 -- UUID → text 型変換（既存テーブルに対する冪等マイグレーション）
 -- 新規 DB では CREATE TABLE IF NOT EXISTS で最初から text になるため影響なし
@@ -786,3 +799,57 @@ select using (user_id = (auth.jwt()->>'sub'));
 -- monthly_snapshots
 drop policy if exists monthly_snapshots_all_member on public.monthly_snapshots;
 create policy monthly_snapshots_all_member on public.monthly_snapshots for all using (public.is_household_member(household_id)) with check (public.is_household_member(household_id));
+-- household_invitations
+alter table public.household_invitations enable row level security;
+drop policy if exists household_invitations_select_member on public.household_invitations;
+create policy household_invitations_select_member on public.household_invitations for
+select using (public.is_household_member(household_id));
+drop policy if exists household_invitations_manage_owner on public.household_invitations;
+create policy household_invitations_manage_owner on public.household_invitations for all using (
+  exists (
+    select 1
+    from public.household_members me
+    where me.household_id = household_invitations.household_id
+      and me.user_id = (auth.jwt()->>'sub')
+      and me.is_active = true
+      and me.role in ('owner', 'admin')
+  )
+);
+-- acceptance function
+create or replace function public.accept_invitation(p_token text) returns uuid language plpgsql security definer
+set search_path = public as $$
+declare v_invitation_record record;
+v_user_id text := auth.jwt()->>'sub';
+begin if v_user_id is null
+or v_user_id = '' then raise exception 'Not authenticated';
+end if;
+select * into v_invitation_record
+from public.household_invitations
+where token = p_token
+  and expires_at > now()
+  and accepted_at is null
+limit 1;
+if not found then raise exception 'Invalid or expired invitation';
+end if;
+-- Add member
+insert into public.household_members (household_id, user_id, role)
+values (
+    v_invitation_record.household_id,
+    v_user_id,
+    v_invitation_record.role
+  ) on conflict (household_id, user_id) do
+update
+set is_active = true,
+  role = excluded.role;
+-- Mark as accepted
+update public.household_invitations
+set accepted_at = now()
+where id = v_invitation_record.id;
+-- Update profile default household
+update public.profiles
+set default_household_id = v_invitation_record.household_id
+where id = v_user_id;
+return v_invitation_record.household_id;
+end;
+$$;
+grant execute on function public.accept_invitation(text) to authenticated;

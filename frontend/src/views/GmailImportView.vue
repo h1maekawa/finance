@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { useHousehold } from '@/composables/useHousehold'
 import { useEmailImport } from '@/composables/useEmailImport'
+import { useAuth } from '@/composables/useAuth'
 
 const { currentHouseholdId } = useHousehold()
 const {
@@ -9,11 +10,25 @@ const {
   importing,
   importMessage,
   importError,
+  isGmailLinked,
   fetchImportLogs,
+  checkGmailLinked,
   triggerGmailImport,
 } = useEmailImport(() => currentHouseholdId.value)
 
-onMounted(() => fetchImportLogs())
+const { signInWithGoogle } = useAuth()
+
+onMounted(async () => {
+  await Promise.all([
+    fetchImportLogs(),
+    checkGmailLinked()
+  ])
+})
+
+async function handleRelink() {
+  await signInWithGoogle()
+  await checkGmailLinked()
+}
 
 function formatDateTime(dt: string) {
   return new Date(dt).toLocaleString('ja-JP', {
@@ -66,19 +81,31 @@ function statusLabel(status: string) {
       </div>
     </section>
 
-    <!-- 手動実行ボタン -->
+    <!-- アクション -->
     <section class="gmail-import__action">
-      <button
-        class="gmail-import__trigger-btn"
-        :disabled="importing"
-        @click="triggerGmailImport"
-      >
-        <span v-if="importing">⏳ 取込中...</span>
-        <span v-else>🔄 今すぐ取込を実行</span>
-      </button>
-      <p class="gmail-import__note">
-        ※ GASのタイムトリガーで1時間おきに自動実行されます。手動で即時実行したい場合はボタンを押してください。
-      </p>
+      <div v-if="isGmailLinked" class="gmail-import__linked-badge">
+        ✅ Gmailと連携済みです
+      </div>
+      <div v-else class="gmail-import__unlinked-notice">
+        <p>📧 Gmailと連携するとクレジットカードの利用明細を自動取込できます</p>
+        <button @click="handleRelink" class="gmail-import__relink-btn">
+          Googleアカウントと連携する
+        </button>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <button
+          class="gmail-import__trigger-btn"
+          :disabled="importing || !isGmailLinked"
+          @click="triggerGmailImport"
+        >
+          <span v-if="importing">⏳ 取込中...</span>
+          <span v-else>🔄 今すぐ取込を実行</span>
+        </button>
+        <p class="gmail-import__note">
+          ※ 1時間おきに自動で実行されます。手動で即時実行したい場合はボタンを押してください。
+        </p>
+      </div>
       <p v-if="importMessage" class="gmail-import__message">{{ importMessage }}</p>
       <p v-if="importError" class="gmail-import__error">{{ importError }}</p>
     </section>
@@ -183,7 +210,44 @@ function statusLabel(status: string) {
   cursor: pointer;
   transition: opacity 0.2s;
 }
-.gmail-import__trigger-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.gmail-import__trigger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gmail-import__linked-badge {
+  display: inline-block;
+  background: #dcfce7;
+  color: #166534;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.gmail-import__unlinked-notice {
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+}
+
+.gmail-import__unlinked-notice p {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.gmail-import__relink-btn {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .gmail-import__note { margin: 0.75rem 0 0; font-size: 0.8rem; color: #9ca3af; }
 .gmail-import__message { margin: 0.5rem 0 0; color: #059669; font-size: 0.9rem; }
 .gmail-import__error { margin: 0.5rem 0 0; color: #dc2626; font-size: 0.9rem; }

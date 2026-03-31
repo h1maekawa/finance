@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import AppHeader from '@/components/layouts/AppHeader.vue'
 import BottomNavigation from '@/components/layouts/BottomNavigation.vue'
 import { useHousehold } from '@/composables/useHousehold'
@@ -10,7 +10,10 @@ import { supabase } from '@/lib/supabase'
 const { sessionStore, initAuth } = useAuth()
 const { fetchHouseholds, households } = useHousehold()
 
+const route = useRoute()
 const loggedIn = computed(() => !!sessionStore.user)
+const showAppChrome = computed(() => loggedIn.value && !route.meta.publicPage)
+const shellClass = computed(() => (showAppChrome.value ? 'mobile-shell' : 'public-shell'))
 
 async function ensureHousehold() {
   await fetchHouseholds()
@@ -38,11 +41,11 @@ watch(
 </script>
 
 <template>
-  <div class="mobile-shell">
-    <AppHeader v-if="loggedIn" />
-    <main class="mobile-main">
+  <div :class="shellClass">
+    <AppHeader v-if="showAppChrome" />
+    <main :class="showAppChrome ? 'mobile-main' : 'public-main'">
       <RouterView />
     </main>
-    <BottomNavigation v-if="loggedIn" />
+    <BottomNavigation v-if="showAppChrome" />
   </div>
 </template>

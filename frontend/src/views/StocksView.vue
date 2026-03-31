@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useStocks } from '@/composables/useStocks'
 import { useHousehold } from '@/composables/useHousehold'
 import { useSecuritiesAccounts } from '@/composables/useSecuritiesAccounts'
@@ -9,17 +9,12 @@ const {
   loading,
   updatingPrices,
   updateErrors,
-  syncingSheet,
-  sheetLoading,
-  sheetError,
-  sheetRows,
   totalEvaluationAmount,
   fetchStocks,
-  fetchSheetRows,
+  fetchLivePrices,
   addStock,
   deleteStock,
   updateFundPrice,
-  updatePrices,
 } = useStocks()
 
 const { currentHouseholdId } = useHousehold()
@@ -28,7 +23,7 @@ const { activeSecuritiesAccounts } = useSecuritiesAccounts(() => currentHousehol
 const formError = ref('')
 const symbolInput = ref('')
 const nameInput = ref('')
-const typeInput = ref<'stock' | 'fund'>('stock')
+const typeInput = ref<'us_stock' | 'jp_stock' | 'fund' | 'etf'>('jp_stock')
 const accountTypeInput = ref('')
 const quantityInput = ref<number | undefined>(undefined)
 const averagePriceInput = ref<number | undefined>(undefined)
@@ -38,26 +33,25 @@ const showAddModal = ref(false)
 const fundPriceInputs = ref<Record<string, number>>({})
 const fundEvaluationInputs = ref<Record<string, number>>({})
 const expandedRows = ref<Record<string, boolean>>({})
-const usdJpyRate = ref(150)
 
-let autoTimer: number | null = null
+// Fund search state
+const fundSearchQuery = ref('')
+const fundSearchResults = ref<any[]>([])
+const searchingFunds = ref(false)
+let searchTimer: number | null = null
 
 const stockCandidates = [
-  { symbol: 'NVDA', name: 'エヌビディア', type: 'stock' as const },
-  { symbol: 'AAPL', name: 'アップル', type: 'stock' as const },
-  { symbol: 'MSFT', name: 'マイクロソフト', type: 'stock' as const },
-  { symbol: 'KO', name: 'コカ・コーラ', type: 'stock' as const },
-  { symbol: 'MU', name: 'マイクロン・テクノロジー', type: 'stock' as const },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', type: 'stock' as const },
-  { symbol: 'VTI', name: 'Vanguard Total Stock Market ETF', type: 'stock' as const },
-  { symbol: '楽天・全米株式インデックス・ファンド(楽天・VTI)', name: '楽天・全米株式インデックス・ファンド(楽天・VTI)', type: 'fund' as const },
-  { symbol: 'eMAXIS Slim 先進国株式インデックス(除く日本)', name: 'eMAXIS Slim 先進国株式インデックス(除く日本)', type: 'fund' as const },
-  { symbol: 'eMAXIS Slim 全世界株式(オール・カントリー)', name: 'eMAXIS Slim 全世界株式(オール・カントリー)', type: 'fund' as const },
-  { symbol: '楽天・オールカントリー株式インデックス・ファンド', name: '楽天・オールカントリー株式インデックス・ファンド', type: 'fund' as const },
+  { symbol: 'NVDA', name: 'エヌビディア', type: 'us_stock' as const },
+  { symbol: 'AAPL', name: 'アップル', type: 'us_stock' as const },
+  { symbol: 'MSFT', name: 'マイクロソフト', type: 'us_stock' as const },
+  { symbol: '7203', name: 'トヨタ自動車', type: 'jp_stock' as const },
+  { symbol: '9984', name: 'ソフトバンクグループ', type: 'jp_stock' as const },
+  { symbol: 'QQQ', name: 'Invesco QQQ Trust', type: 'etf' as const },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', type: 'etf' as const },
 ]
 
 const filteredCandidates = computed(() => {
-  const keyword = `${symbolInput.value} ${nameInput.value}`.trim().toLowerCase()
+  const keyword = symbolInput.value.trim().toLowerCase()
   if (!keyword) return stockCandidates.slice(0, 8)
   return stockCandidates
     .filter((item) =>
@@ -76,7 +70,7 @@ const totalProfitLossRate = computed(() => {
   return (totalProfitLoss.value / costTotal) * 100
 })
 
-const stockRows = computed(() => stocks.value.filter((row) => row.type === 'stock'))
+const stockRows = computed(() => stocks.value.filter((row) => row.type !== 'fund'))
 const fundRows = computed(() => stocks.value.filter((row) => row.type === 'fund'))
 
 const lastUpdatedLabel = computed(() => {
@@ -95,14 +89,44 @@ const lastUpdatedLabel = computed(() => {
   })
 })
 
-function selectCandidate(candidate: { symbol: string; name: string; type: 'stock' | 'fund' }) {
+function selectCandidate(candidate: { symbol: string; name: string; type: any }) {
   symbolInput.value = candidate.symbol
   nameInput.value = candidate.name
   typeInput.value = candidate.type
 }
 
-function quantityUnit(type: 'stock' | 'fund') {
-  return type === 'stock' ? '株' : '口'
+// Fund search logic
+async function performFundSearch() {
+  if (!fundSearchQuery.value || fundSearchQuery.value.length < 2) {
+    fundSearchResults.value = []
+    return
+  }
+  searchingFunds.value = true
+  try {
+    const res = await fetch(`/api/prices/fund-search?q=${encodeURIComponent(fundSearchQuery.value)}`)
+    const data = await res.json()
+    fundSearchResults.value = data.results || []
+  } catch (e) {
+    console.error('Search error:', e)
+  } finally {
+    searchingFunds.value = false
+  }
+}
+
+function onFundSearchInput() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(performFundSearch, 300)
+}
+
+function selectFund(fund: any) {
+  symbolInput.value = fund.code
+  nameInput.value = fund.name
+  fundSearchQuery.value = fund.name
+  fundSearchResults.value = []
+}
+
+function quantityUnit(type: string) {
+  return (type === 'jp_stock' || type === 'us_stock') ? '株' : '口'
 }
 
 function formatNumber(value: number, fractionDigits = 2) {
@@ -118,10 +142,8 @@ function profitClass(value: number) {
   return ''
 }
 
-function currentValueText(type: 'stock' | 'fund', value: number) {
-  return type === 'stock'
-    ? `${formatNumber(Number(value) * Number(usdJpyRate.value), 0)}円 (${formatNumber(Number(value), 2)}USドル)`
-    : `${formatNumber(Number(value), 2)}円`
+function currentValueText(_type: string, value: number) {
+  return `${formatNumber(Number(value), 0)}円`
 }
 
 function toggleDetail(id: string) {
@@ -173,13 +195,17 @@ async function handleAddInvestment() {
 
     symbolInput.value = ''
     nameInput.value = ''
-    typeInput.value = 'stock'
+    typeInput.value = 'jp_stock'
     accountTypeInput.value = ''
     quantityInput.value = undefined
     averagePriceInput.value = undefined
     currentPriceInput.value = undefined
     evaluationAmountInput.value = undefined
+    fundSearchQuery.value = ''
     showAddModal.value = false
+    
+    // Auto refresh after add
+    void fetchLivePrices()
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '登録に失敗しました。'
   }
@@ -201,11 +227,9 @@ function onSelectSecuritiesAccount(accountId: string) {
 async function handleUpdatePrices() {
   formError.value = ''
   try {
-    await updatePrices(usdJpyRate.value)
+    await fetchLivePrices()
   } catch (error) {
-    formError.value = error instanceof Error
-      ? `価格同期に失敗しました。(${error.message})`
-      : '価格同期に失敗しました。'
+    formError.value = '価格更新に失敗しました。'
   }
 }
 
@@ -232,21 +256,9 @@ async function handleSaveFundPrice(id: string) {
   }
 }
 
-function handleFetchSheetRows() {
-  void fetchSheetRows('all')
-}
-
-onMounted(() => {
-  void fetchStocks()
-  autoTimer = window.setInterval(() => {
-    void handleUpdatePrices()
-  }, 5 * 60 * 1000)
-})
-
-onBeforeUnmount(() => {
-  if (autoTimer !== null) {
-    window.clearInterval(autoTimer)
-  }
+onMounted(async () => {
+  await fetchStocks()
+  void fetchLivePrices()
 })
 
 watch(
@@ -256,6 +268,7 @@ watch(
   },
   { immediate: true },
 )
+
 </script>
 
 <template>
@@ -265,12 +278,8 @@ watch(
       <p class="stocks-view__summary-value">評価額合計: {{ formatNumber(totalEvaluationAmount, 0) }} 円</p>
       <p class="stocks-view__summary-sub">評価損益合計: <span :class="profitClass(totalProfitLoss)">{{ formatNumber(totalProfitLoss, 0) }} 円</span></p>
       <p class="stocks-view__summary-sub">評価損益率合計: <span :class="profitClass(totalProfitLossRate)">{{ formatNumber(totalProfitLossRate, 2) }}%</span></p>
-      <label class="stocks-view__fx-input">
-        <span>USD/JPY</span>
-        <input v-model.number="usdJpyRate" type="number" min="1" step="0.01" />
-      </label>
       <button class="stocks-view__update-btn" :disabled="updatingPrices" @click="handleUpdatePrices">
-        {{ updatingPrices ? '更新中...' : '価格更新（Google Sheets）' }}
+        {{ updatingPrices ? '更新中...' : '価格更新' }}
       </button>
       <p class="stocks-view__summary-sub">最終更新: {{ lastUpdatedLabel }}</p>
       <ul v-if="updateErrors.length > 0" class="stocks-view__errors">
@@ -284,50 +293,44 @@ watch(
       <button type="button" @click="showAddModal = true">登録</button>
     </section>
 
-    <section class="card stocks-view__table-wrap">
-      <div class="stocks-view__sheet-head">
-        <h3 style="margin: 0;">Google Sheets 連携データ</h3>
-        <button :disabled="sheetLoading" @click="handleFetchSheetRows">
-          {{ sheetLoading ? '取得中...' : '再取得' }}
-        </button>
-      </div>
-      <p v-if="syncingSheet" class="stocks-view__sheet-meta">Sheetsに同期中...</p>
-      <p v-if="sheetError" class="stocks-view__error">{{ sheetError }}</p>
-      <p v-if="sheetLoading">読み込み中...</p>
-      <p v-else-if="sheetRows.length === 0">Sheetsにデータがありません。</p>
-      <table v-else class="stocks-view__table">
-        <thead>
-          <tr>
-            <th>銘柄コード</th>
-            <th>銘柄名</th>
-            <th>保有数</th>
-            <th>現在価格</th>
-            <th>評価額</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, idx) in sheetRows" :key="`${row.symbol}-${idx}`">
-            <td>{{ row.symbol }}</td>
-            <td>{{ row.name }}</td>
-            <td>{{ formatNumber(Number(row.quantity), 4) }}</td>
-            <td>{{ formatNumber(Number(row.currentPrice), 2) }}</td>
-            <td>{{ formatNumber(Number(row.evaluationAmount), 0) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <!-- Sheets integration UI removed -->
 
     <div v-if="showAddModal" class="stocks-view__modal-overlay" @click.self="showAddModal = false">
       <section class="stocks-view__modal card">
         <h3 style="margin-top: 0;">銘柄追加</h3>
         <form class="stocks-view__form" @submit.prevent="handleAddInvestment">
           <select v-model="typeInput" required>
-            <option value="stock">個別株（株）</option>
-            <option value="fund">投資信託・ETF（口）</option>
+            <option value="jp_stock">日本株（株）</option>
+            <option value="us_stock">米国株（株）</option>
+            <option value="fund">投資信託（口）</option>
+            <option value="etf">ETF（株）</option>
           </select>
-          <input v-model="symbolInput" type="text" placeholder="銘柄コード（例: NVDA）" required />
-          <input v-model="nameInput" type="text" placeholder="銘柄名（例: 楽天・全米株式インデックス・ファンド）" required />
-          <ul v-if="filteredCandidates.length > 0" class="stocks-view__suggestions">
+
+          <!-- Fund Search Input -->
+          <div v-if="typeInput === 'fund'" class="stocks-view__search-wrap">
+            <input
+              v-model="fundSearchQuery"
+              type="text"
+              placeholder="投資信託名で検索（例: オルカン）"
+              @input="onFundSearchInput"
+            />
+            <ul v-if="fundSearchResults.length > 0" class="stocks-view__suggestions">
+              <li
+                v-for="fund in fundSearchResults"
+                :key="fund.code"
+                class="stocks-view__suggestion-item"
+                @click="selectFund(fund)"
+              >
+                {{ fund.name }} ({{ fund.code }})
+              </li>
+            </ul>
+            <p v-if="searchingFunds" class="stocks-view__search-status">検索中...</p>
+          </div>
+
+          <input v-model="symbolInput" type="text" :placeholder="typeInput === 'jp_stock' ? '銘柄コード（例: 7203）' : 'シンボル（例: AAPL / 0131103C）'" required />
+          <input v-model="nameInput" type="text" placeholder="銘柄名" required />
+          
+          <ul v-if="filteredCandidates.length > 0 && typeInput !== 'fund'" class="stocks-view__suggestions">
             <li
               v-for="candidate in filteredCandidates"
               :key="`${candidate.type}-${candidate.symbol}`"
@@ -337,6 +340,7 @@ watch(
               {{ candidate.name }}
             </li>
           </ul>
+
           <select @change="onSelectSecuritiesAccount(($event.target as HTMLSelectElement).value)">
             <option value="">証券口座から設定（任意）</option>
             <option v-for="acc in activeSecuritiesAccounts" :key="acc.id" :value="acc.id">
@@ -353,25 +357,14 @@ watch(
             required
           />
           <input v-model.number="averagePriceInput" type="number" step="0.0001" min="0" placeholder="平均取得価額" required />
-          <input
-            v-if="typeInput === 'fund'"
-            v-model.number="currentPriceInput"
-            type="number"
-            step="0.0001"
-            min="0"
-            placeholder="現在価格（投資信託/ETFは手動）"
-          />
-          <input
-            v-if="typeInput === 'fund'"
-            v-model.number="evaluationAmountInput"
-            type="number"
-            step="1"
-            min="0"
-            placeholder="評価額（投資信託/ETFは手動）"
-            required
-          />
+          
+          <div v-if="typeInput === 'fund'" class="stocks-view__fund-manual">
+             <input v-model.number="currentPriceInput" type="number" step="0.0001" min="0" placeholder="現在価格（手動）" />
+             <input v-model.number="evaluationAmountInput" type="number" step="1" min="0" placeholder="評価額（手動）" required />
+          </div>
+
           <div style="display: flex; gap: 0.5rem;">
-            <button type="submit">登録する</button>
+            <button type="submit" :disabled="loading">登録する</button>
             <button type="button" @click="showAddModal = false">閉じる</button>
           </div>
         </form>
@@ -598,6 +591,24 @@ watch(
 
 .stocks-view__error {
   color: #fecaca;
+}
+
+.stocks-view__search-wrap {
+  position: relative;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.stocks-view__search-status {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.stocks-view__fund-manual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
 .stocks-view__form {

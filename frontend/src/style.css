@@ -43,6 +43,15 @@ body {
 
 #app { min-height: 100vh; }
 
+.public-shell {
+  min-height: 100vh;
+  width: 100%;
+}
+
+.public-main {
+  min-height: 100vh;
+}
+
 /* ===========================
    レイアウト（レスポンシブ）
    ========================= */

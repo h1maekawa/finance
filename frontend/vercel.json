@@ -1,6 +1,18 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/gmail-import",
+      "schedule": "0 * * * *"
+    }
+  ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }

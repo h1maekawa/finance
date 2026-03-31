@@ -6,6 +6,7 @@ import { useHousehold } from '@/composables/useHousehold'
 import { useTransactions } from '@/composables/useTransactions'
 import { useAccounts } from '@/composables/useAccounts'
 import { useStocks } from '@/composables/useStocks'
+import { useBudgets } from '@/composables/useBudgets'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -17,8 +18,23 @@ const {
 } = useTransactions(() => currentHouseholdId.value)
 const { accounts, totalBalance } = useAccounts(() => currentHouseholdId.value)
 const { stocks, totalEvaluationAmount } = useStocks()
+const { budgets } = useBudgets(() => currentHouseholdId.value)
 
 const grandTotal = computed(() => totalBalance.value + totalEvaluationAmount.value)
+
+// 今月の予算を取得（簡易的に最初の1件、またはカテゴリ未設定の全体予算を想定）
+const monthlyBudget = computed(() => {
+  const currentMonthStr = selectedMonth.value.toISOString().slice(0, 7) + '-01'
+  const b = budgets.value.find(x => x.period_start === currentMonthStr)
+  return b ? b.amount : 0
+})
+
+const budgetProgress = computed(() => {
+  if (monthlyBudget.value <= 0) return 0
+  return Math.min(100, (totalExpense.value / monthlyBudget.value) * 100)
+})
+
+const remainingBudget = computed(() => monthlyBudget.value - totalExpense.value)
 
 const monthInput = computed({
   get: () => selectedMonth.value.toISOString().slice(0, 7),
@@ -35,13 +51,14 @@ const daysLeftInMonth = computed(() => {
 })
 
 const todaySpendable = computed(() => {
-  const allowance = totalIncome.value - totalExpense.value
-  if (allowance <= 0) return 0
-  return Math.floor(allowance / daysLeftInMonth.value)
+  // 予算がある場合は予算ベース、ない場合は収入ベースで計算
+  const base = monthlyBudget.value > 0 ? remainingBudget.value : (totalIncome.value - totalExpense.value)
+  if (base <= 0) return 0
+  return Math.floor(base / daysLeftInMonth.value)
 })
 
 const todaySpendableMessage = computed(() =>
-  todaySpendable.value > 0 ? '余裕があります！' : '貯金目標のため今日は節制を',
+  todaySpendable.value > 0 ? (monthlyBudget.value > 0 ? '予算内で収まっています' : '余裕があります！') : '貯金目標のため今日は節制を',
 )
 
 
@@ -138,6 +155,22 @@ const chartOptions = {
       </div>
     </section>
 
+    <section v-if="monthlyBudget > 0" class="dashboard__section dashboard__section--budget">
+      <div class="dashboard__budget-header">
+        <h2 class="dashboard__heading">今月の予算状況</h2>
+        <span class="dashboard__budget-remaining">残り {{ remainingBudget.toLocaleString() }}円</span>
+      </div>
+      <div class="dashboard__budget-progress-bg">
+        <div 
+          class="dashboard__budget-progress-bar" 
+          :style="{ width: `${budgetProgress}%`, backgroundColor: budgetProgress > 90 ? '#ef4444' : '#0d9488' }"
+        ></div>
+      </div>
+      <p class="dashboard__budget-detail">
+        予算 {{ monthlyBudget.toLocaleString() }}円 / 支出 {{ totalExpense.toLocaleString() }}円
+      </p>
+    </section>
+
     <section class="dashboard__section dashboard__section--highlight">
       <h2 class="dashboard__heading">今日使っていい金額</h2>
       <p class="dashboard__today-amount">{{ todaySpendable.toLocaleString() }}円</p>
@@ -210,7 +243,7 @@ const chartOptions = {
 }
 
 .dashboard__section {
-  background: var(--card-bg);
+  background: var(--color-surface);
   border-radius: 16px;
   padding: 1.25rem 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -219,6 +252,39 @@ const chartOptions = {
 .dashboard__section--highlight {
   background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
   color: #fff;
+}
+
+.dashboard__budget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.dashboard__budget-remaining {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0d9488;
+}
+
+.dashboard__budget-progress-bg {
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard__budget-progress-bar {
+  height: 100%;
+  transition: width 0.4s ease-out;
+}
+
+.dashboard__budget-detail {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: right;
 }
 
 .dashboard__section--month-picker {
@@ -231,7 +297,7 @@ const chartOptions = {
   margin: 0 0 0.5rem 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .dashboard__section--highlight .dashboard__heading {
@@ -291,7 +357,7 @@ const chartOptions = {
 .dashboard__month-label {
   font-size: 0.9rem;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .dashboard__month-input {
