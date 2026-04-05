@@ -52,9 +52,7 @@ export function useEmailImport(householdId: () => string | null) {
             }
 
             const idToken = await user.getIdToken()
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://gnpydpxozyovrbcgwvay.supabase.co'
-            
-            const response = await fetch(`${supabaseUrl}/functions/v1/gmail-import`, {
+            const response = await fetch(`/api/gmail/sync`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',

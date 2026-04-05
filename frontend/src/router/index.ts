@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LandingView from '@/views/LandingView.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import HomeView from '@/views/HomeView.vue'
+import BalancesView from '@/views/BalancesView.vue'
+import HistoryView from '@/views/HistoryView.vue'
+import AnalysisView from '@/views/AnalysisView.vue'
 import GoalView from '@/views/GoalView.vue'
 import CashflowView from '@/views/CashflowView.vue'
 import CategoriesView from '@/views/CategoriesView.vue'
@@ -23,6 +27,12 @@ const router = createRouter({
     { path: '/', component: LandingView, meta: { publicPage: true } },
     { path: '/login', component: LoginView, meta: { publicPage: true, authOnly: true } },
     { path: '/signup', component: SignupView, meta: { publicPage: true, authOnly: true } },
+    // new homes
+    { path: '/home', component: HomeView, meta: { requiresAuth: true } },
+    { path: '/balances', component: BalancesView, meta: { requiresAuth: true } },
+    { path: '/history', component: HistoryView, meta: { requiresAuth: true } },
+    { path: '/analysis', component: AnalysisView, meta: { requiresAuth: true } },
+    // legacy / existing
     { path: '/dashboard', component: DashboardView, meta: { requiresAuth: true } },
     { path: '/entry', component: TransactionEntryView, meta: { requiresAuth: true } },
     { path: '/reports', component: ReportsView, meta: { requiresAuth: true } },

@@ -2,7 +2,7 @@ import { onMounted, ref } from 'vue'
 import { firebaseAuth } from '@/lib/firebase'
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
 import { supabase } from '@/lib/supabase'
-import { sessionStore } from '@/stores/session'
+import { sessionStore, syncGmail } from '@/stores/session'
 import type { AuthUser } from '@/stores/session'
 
 let subscribed = false
@@ -57,7 +57,6 @@ export function useAuth() {
     try {
       const provider = new GoogleAuthProvider()
       provider.addScope('https://www.googleapis.com/auth/gmail.readonly')
-      // Custom param for prompt / offline could be added if needed via provider.setCustomParameters
       provider.setCustomParameters({
         prompt: 'consent',
         access_type: 'offline'
@@ -69,6 +68,9 @@ export function useAuth() {
       if (credential?.accessToken) {
         await saveGmailToken(result.user.uid, credential.accessToken)
       }
+
+      // Trigger Gmail sync in background after login
+      syncGmail().catch(() => {})
     } catch (authError) {
       console.error('Failed to sign in with Google:', authError)
     } finally {

@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/gmail-import",
+      "path": "/api/cron/gmail-sync",
       "schedule": "0 * * * *"
     }
   ],

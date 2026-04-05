@@ -859,3 +859,62 @@ return v_invitation_record.household_id;
 end;
 $$;
 grant execute on function public.accept_invitation(text) to authenticated;
+
+-- ------------------------------------------------------------
+-- gmail_tokens
+-- ------------------------------------------------------------
+create table if not exists public.gmail_tokens (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  access_token text not null,
+  refresh_token text,
+  token_type text not null,
+  scopes text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.gmail_tokens enable row level security;
+
+create policy gmail_tokens_select_own on public.gmail_tokens for
+select using (user_id = (auth.jwt()->>'sub')::uuid);
+
+create policy gmail_tokens_insert_own on public.gmail_tokens for
+insert with check (user_id = (auth.jwt()->>'sub')::uuid);
+
+create policy gmail_tokens_update_own on public.gmail_tokens for
+update using (user_id = (auth.jwt()->>'sub')::uuid);
+
+create policy gmail_tokens_delete_own on public.gmail_tokens for
+delete using (user_id = (auth.jwt()->>'sub')::uuid);
+
+
+-- ------------------------------------------------------------
+-- email_import_logs
+-- ------------------------------------------------------------
+create table if not exists public.email_import_logs (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  gmail_message_id text not null,
+  card_type text not null,
+  transaction_date date not null,
+  store_name text not null,
+  amount numeric not null,
+  category_id uuid references public.categories(id) on delete set null,
+  credit_card_id uuid references public.credit_cards(id) on delete set null,
+  transaction_id uuid references public.transactions(id) on delete set null,
+  status text not null,
+  raw_subject text,
+  imported_at timestamptz not null default now(),
+  unique(gmail_message_id)
+);
+
+alter table public.email_import_logs enable row level security;
+
+create policy email_import_logs_select on public.email_import_logs for
+select using (public.is_household_member(household_id));
+
+create policy email_import_logs_insert on public.email_import_logs for
+insert with check (public.is_household_member(household_id));
+
