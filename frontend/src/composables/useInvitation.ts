@@ -31,10 +31,18 @@ export function useInvitation(householdId: () => string | null) {
     const hid = householdId()
     if (!hid) return
     
+    // Import sessionStore locally here if not imported at the top, but better to import it at top.
+    // Instead of importing sessionStore, we can just use firebaseAuth since we already have Firebase configured.
+    // Wait, firebaseAuth gives us current user synchronously.
+
+    const { firebaseAuth } = await import('@/lib/firebase')
+    const user = firebaseAuth.currentUser
+    if (!user) throw new Error('Not authenticated')
+
     const token = crypto.randomUUID()
     const { error } = await supabase.from('household_invitations').insert({
       household_id: hid,
-      inviter_user_id: (await supabase.auth.getUser()).data.user?.id,
+      inviter_user_id: user.uid,
       email,
       token,
       role: 'member'

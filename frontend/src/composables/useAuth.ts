@@ -1,15 +1,17 @@
 import { onMounted, ref } from 'vue'
+import { firebaseAuth } from '@/lib/firebase'
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
 import { supabase } from '@/lib/supabase'
 import { sessionStore } from '@/stores/session'
 import type { AuthUser } from '@/stores/session'
 
 let subscribed = false
 
-function mapSupabaseUserToAuthUser(user: any): AuthUser {
+function mapFirebaseUserToAuthUser(user: any): AuthUser {
   return {
-    id: user.id,
+    id: user.uid,
     email: user.email ?? null,
-    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+    name: user.displayName ?? null,
   }
 }
 
@@ -23,41 +25,24 @@ export function useAuth() {
     subscribed = true
 
     return new Promise((resolve) => {
-      // 現在のセッションを確認
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          sessionStore.user = mapSupabaseUserToAuthUser(session.user)
-          saveGmailTokenFromSession(session)
-        }
-        sessionStore.initialized = true
-        resolve()
-      })
-
-      // 認証状態の変化を監視
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session) {
-          sessionStore.user = mapSupabaseUserToAuthUser(session.user)
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            await saveGmailTokenFromSession(session)
-          }
+      onAuthStateChanged(firebaseAuth, (user: import('firebase/auth').User | null) => {
+        if (user) {
+          sessionStore.user = mapFirebaseUserToAuthUser(user)
         } else {
           sessionStore.user = null
         }
         sessionStore.initialized = true
+        resolve()
       })
     })
   }
 
-  async function saveGmailTokenFromSession(session: any) {
-    const { provider_token, provider_refresh_token, user } = session
-    if (!provider_token) return
-
+  async function saveGmailToken(userId: string, accessToken: string) {
     try {
-      // Supabase Auth の Google 連携で取得したトークンを gmail_tokens テーブルに保存
       await supabase.from('gmail_tokens').upsert({
-        user_id: user.id,
-        access_token: provider_token,
-        refresh_token: provider_refresh_token ?? null, // 既存があれば維持、新規があれば更新
+        user_id: userId,
+        access_token: accessToken,
+        refresh_token: null, // Depending on offline access, refresh token might not be available from popup
         token_type: 'google',
         scopes: 'https://www.googleapis.com/auth/gmail.readonly',
         expires_at: new Date(Date.now() + 3500 * 1000).toISOString(),
@@ -70,29 +55,36 @@ export function useAuth() {
   async function signInWithGoogle() {
     loading.value = true
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/dashboard',
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          scopes: 'https://www.googleapis.com/auth/gmail.readonly',
-        },
+      const provider = new GoogleAuthProvider()
+      provider.addScope('https://www.googleapis.com/auth/gmail.readonly')
+      // Custom param for prompt / offline could be added if needed via provider.setCustomParameters
+      provider.setCustomParameters({
+        prompt: 'consent',
+        access_type: 'offline'
       })
-      if (error) throw error
+
+      const result = await signInWithPopup(firebaseAuth, provider)
+      const credential = GoogleAuthProvider.credentialFromResult(result)
+      
+      if (credential?.accessToken) {
+        await saveGmailToken(result.user.uid, credential.accessToken)
+      }
     } catch (authError) {
       console.error('Failed to sign in with Google:', authError)
     } finally {
-      // OAuth はリダイレクトが走るため、loading は基本的にそのまま
+      loading.value = false
     }
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut()
-    if (error) console.error('Sign out error:', error)
-    sessionStore.user = null
+    try {
+      await firebaseSignOut(firebaseAuth)
+      await supabase.auth.signOut() // Just in case to clear any internal supabase session
+    } catch (error) {
+      console.error('Sign out error:', error)
+    } finally {
+      sessionStore.user = null
+    }
   }
 
   onMounted(() => {

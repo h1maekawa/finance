@@ -12,6 +12,9 @@ import SettingsView from '@/views/SettingsView.vue'
 import LoginView from '@/views/LoginView.vue'
 import SignupView from '@/views/SignupView.vue'
 import GmailImportView from '@/views/GmailImportView.vue'
+import TransactionEntryView from '@/views/TransactionEntryView.vue'
+import ReportsView from '@/views/ReportsView.vue'
+import BudgetSettingsView from '@/views/BudgetSettingsView.vue'
 import { sessionStore } from '@/stores/session'
 
 const router = createRouter({
@@ -21,6 +24,9 @@ const router = createRouter({
     { path: '/login', component: LoginView, meta: { publicPage: true, authOnly: true } },
     { path: '/signup', component: SignupView, meta: { publicPage: true, authOnly: true } },
     { path: '/dashboard', component: DashboardView, meta: { requiresAuth: true } },
+    { path: '/entry', component: TransactionEntryView, meta: { requiresAuth: true } },
+    { path: '/reports', component: ReportsView, meta: { requiresAuth: true } },
+    { path: '/budgets', component: BudgetSettingsView, meta: { requiresAuth: true } },
     { path: '/goal', component: GoalView, meta: { requiresAuth: true } },
     { path: '/accounts', component: AccountsView, meta: { requiresAuth: true } },
     { path: '/investments', component: StocksView, meta: { requiresAuth: true } },

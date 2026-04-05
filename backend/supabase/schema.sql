@@ -692,6 +692,9 @@ insert with check (id = (auth.jwt()->>'sub'));
 drop policy if exists profiles_update_own on public.profiles;
 create policy profiles_update_own on public.profiles for
 update using (id = (auth.jwt()->>'sub')) with check (id = (auth.jwt()->>'sub'));
+drop policy if exists profiles_delete_own on public.profiles;
+create policy profiles_delete_own on public.profiles for
+delete using (id = (auth.jwt()->>'sub'));
 -- households
 drop policy if exists households_select_member on public.households;
 create policy households_select_member on public.households for
@@ -702,6 +705,9 @@ insert with check (owner_user_id = (auth.jwt()->>'sub'));
 drop policy if exists households_update_owner on public.households;
 create policy households_update_owner on public.households for
 update using (owner_user_id = (auth.jwt()->>'sub')) with check (owner_user_id = (auth.jwt()->>'sub'));
+drop policy if exists households_delete_owner on public.households;
+create policy households_delete_owner on public.households for
+delete using (owner_user_id = (auth.jwt()->>'sub'));
 -- household_members
 drop policy if exists household_members_select_member on public.household_members;
 create policy household_members_select_member on public.household_members for

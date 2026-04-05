@@ -1,369 +1,119 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Doughnut } from 'vue-chartjs'
-import { ArcElement, Chart as ChartJS, Legend, Tooltip } from 'chart.js'
-import { useHousehold } from '@/composables/useHousehold'
-import { useTransactions } from '@/composables/useTransactions'
-import { useAccounts } from '@/composables/useAccounts'
-import { useStocks } from '@/composables/useStocks'
-import { useBudgets } from '@/composables/useBudgets'
-
-ChartJS.register(ArcElement, Tooltip, Legend)
-
-const { currentHouseholdId } = useHousehold()
-const {
-  selectedMonth,
-  totalIncome,
-  totalExpense,
-} = useTransactions(() => currentHouseholdId.value)
-const { accounts, totalBalance } = useAccounts(() => currentHouseholdId.value)
-const { stocks, totalEvaluationAmount } = useStocks()
-const { budgets } = useBudgets(() => currentHouseholdId.value)
-
-const grandTotal = computed(() => totalBalance.value + totalEvaluationAmount.value)
-
-// 今月の予算を取得（簡易的に最初の1件、またはカテゴリ未設定の全体予算を想定）
-const monthlyBudget = computed(() => {
-  const currentMonthStr = selectedMonth.value.toISOString().slice(0, 7) + '-01'
-  const b = budgets.value.find(x => x.period_start === currentMonthStr)
-  return b ? b.amount : 0
-})
-
-const budgetProgress = computed(() => {
-  if (monthlyBudget.value <= 0) return 0
-  return Math.min(100, (totalExpense.value / monthlyBudget.value) * 100)
-})
-
-const remainingBudget = computed(() => monthlyBudget.value - totalExpense.value)
-
-const monthInput = computed({
-  get: () => selectedMonth.value.toISOString().slice(0, 7),
-  set: (value: string) => {
-    selectedMonth.value = new Date(`${value}-01T00:00:00`)
-  },
-})
-
-const daysLeftInMonth = computed(() => {
-  const now = new Date()
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const left = last.getDate() - now.getDate() + 1
-  return Math.max(1, left)
-})
-
-const todaySpendable = computed(() => {
-  // 予算がある場合は予算ベース、ない場合は収入ベースで計算
-  const base = monthlyBudget.value > 0 ? remainingBudget.value : (totalIncome.value - totalExpense.value)
-  if (base <= 0) return 0
-  return Math.floor(base / daysLeftInMonth.value)
-})
-
-const todaySpendableMessage = computed(() =>
-  todaySpendable.value > 0 ? (monthlyBudget.value > 0 ? '予算内で収まっています' : '余裕があります！') : '貯金目標のため今日は節制を',
-)
-
-
-// --- Pie chart data ---
-const chartColors = [
-  '#2563eb', '#60a5fa', '#93c5fd', '#bfdbfe',
-  '#7c3aed', '#a78bfa', '#c4b5fd', '#ddd6fe',
-]
-
-const chartData = computed(() => {
-  const labels: string[] = []
-  const data: number[] = []
-  const bgColors: string[] = []
-  let colorIdx = 0
-
-  for (const a of accounts.value) {
-    if (a.balance > 0) {
-      labels.push(a.institution_name)
-      data.push(a.balance)
-      bgColors.push(chartColors[colorIdx % chartColors.length])
-      colorIdx++
-    }
-  }
-  for (const stock of stocks.value) {
-    const amount = Number(stock.evaluation_amount ?? 0)
-    if (amount > 0) {
-      labels.push(`${stock.symbol}`)
-      data.push(amount)
-      bgColors.push(chartColors[colorIdx % chartColors.length])
-      colorIdx++
-    }
-  }
-
-  if (data.length === 0) {
-    labels.push('データなし')
-    data.push(1)
-    bgColors.push('#e5e7eb')
-  }
-
-  return {
-    labels,
-    datasets: [
-      {
-        data,
-        backgroundColor: bgColors,
-        borderWidth: 2,
-        borderColor: '#ffffff',
-      },
-    ],
-  }
-})
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '65%',
-  plugins: {
-    legend: {
-      position: 'bottom' as const,
-      labels: {
-        boxWidth: 12,
-        padding: 12,
-        font: { size: 11 },
-      },
-    },
-    tooltip: {
-      callbacks: {
-        label: (ctx: { label: string; parsed: number }) =>
-          `${ctx.label}: ${ctx.parsed.toLocaleString()} 円`,
-      },
-    },
-  },
-}
-
+// ダッシュボード更新版
 </script>
 
 <template>
-  <main class="dashboard">
-    <!-- 総資産ヒーロー -->
-    <section class="dashboard__hero">
-      <p class="dashboard__hero-label">総資産</p>
-      <p class="dashboard__hero-amount">{{ grandTotal.toLocaleString() }}<span class="dashboard__hero-unit">円</span></p>
-      <div class="dashboard__hero-sub">
-        <span>🏦 口座 {{ totalBalance.toLocaleString() }}円</span>
-        <span>📊 資産 {{ totalEvaluationAmount.toLocaleString() }}円</span>
+  <div class="space-y-8 pb-4">
+    <!-- Welcome Section -->
+    <section class="space-y-1">
+      <p class="font-label text-[11px] text-on-surface-variant font-semibold uppercase tracking-widest leading-none">おはようございます、サラさん</p>
+      <h1 class="text-3xl font-extrabold tracking-tight text-on-surface font-headline">家計の概況</h1>
+    </section>
+
+    <!-- Bento Grid Main Content -->
+    <div class="grid grid-cols-1 gap-6">
+      <!-- Summary Card (Editorial Style) -->
+      <div class="bg-surface-container-lowest rounded-[2rem] p-8 space-y-8 transition-all duration-300 shadow-sm border border-outline-variant/10">
+        <div class="flex justify-between items-start">
+          <div class="space-y-1">
+            <p class="font-label text-[11px] text-on-surface-variant font-medium">今月の残高</p>
+            <p class="text-4xl font-extrabold text-primary tracking-tighter leading-none">¥428,050</p>
+          </div>
+          <div class="bg-secondary-fixed text-on-secondary-container px-3 py-1 rounded-full text-[12px] font-bold">+12%</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="bg-surface-container-low p-5 rounded-2xl space-y-2">
+            <div class="flex items-center gap-2 text-secondary">
+              <span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+              <span class="text-[11px] font-bold uppercase tracking-wider font-label">収入</span>
+            </div>
+            <p class="text-xl font-bold text-on-surface">¥750,000</p>
+          </div>
+          <div class="bg-surface-container-low p-5 rounded-2xl space-y-2">
+            <div class="flex items-center gap-2 text-tertiary">
+              <span class="material-symbols-outlined text-[18px]">arrow_upward</span>
+              <span class="text-[11px] font-bold uppercase tracking-wider font-label">支出</span>
+            </div>
+            <p class="text-xl font-bold text-on-surface">¥321,900</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Budget Progress Ring Card -->
+      <div class="bg-surface-container-lowest rounded-[2rem] p-8 flex flex-col items-center justify-center space-y-6 shadow-sm border border-outline-variant/10">
+        <div class="relative w-40 h-40">
+          <svg class="w-full h-full transform -rotate-90">
+            <circle class="text-surface-container-high" stroke-width="12" stroke="currentColor" fill="transparent" r="70" cx="80" cy="80"></circle>
+            <circle class="text-primary transition-all duration-1000 ease-out" stroke-width="12" stroke-dasharray="440" stroke-dashoffset="154" stroke-linecap="round" stroke="currentColor" fill="transparent" r="70" cx="80" cy="80"></circle>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-3xl font-extrabold text-on-surface">65%</span>
+            <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">使用済み</span>
+          </div>
+        </div>
+        <div class="text-center space-y-1">
+          <h3 class="font-bold text-lg font-headline">今月の予算</h3>
+          <p class="text-on-surface-variant text-sm font-body">残り12日間で、あと <span class="text-primary font-bold">¥178,100</span> 使えます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Transactions Section -->
+    <section class="space-y-6">
+      <div class="flex justify-between items-end">
+        <h2 class="text-2xl font-bold tracking-tight font-headline">最近の取引</h2>
+        <button class="text-primary font-bold text-sm hover:underline transition-all">すべて見る</button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- Transaction 1 -->
+        <div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl transition-all duration-200 active:scale-[0.98] shadow-sm border border-outline-variant/5">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-primary-fixed flex items-center justify-center rounded-2xl">
+              <span class="material-symbols-outlined text-on-primary-fixed-variant" style="font-variation-settings: 'FILL' 1;">restaurant</span>
+            </div>
+            <div>
+              <p class="font-bold text-on-surface">ライフ（スーパー）</p>
+              <p class="text-xs text-on-surface-variant font-medium">食費・日用品 • 今日</p>
+            </div>
+          </div>
+          <p class="font-bold text-tertiary">-¥8,420</p>
+        </div>
+
+        <!-- Transaction 2 -->
+        <div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl transition-all duration-200 active:scale-[0.98] shadow-sm border border-outline-variant/5">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-secondary-container flex items-center justify-center rounded-2xl">
+              <span class="material-symbols-outlined text-on-secondary-container" style="font-variation-settings: 'FILL' 1;">home</span>
+            </div>
+            <div>
+              <p class="font-bold text-on-surface">メトロポリス住宅管理</p>
+              <p class="text-xs text-on-surface-variant font-medium">家賃・光熱費 • 10月1日</p>
+            </div>
+          </div>
+          <p class="font-bold text-tertiary">-¥180,000</p>
+        </div>
+
+        <!-- Transaction 3 -->
+        <div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl transition-all duration-200 active:scale-[0.98] shadow-sm border border-outline-variant/5">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-tertiary-fixed flex items-center justify-center rounded-2xl">
+              <span class="material-symbols-outlined text-on-tertiary-fixed-variant" style="font-variation-settings: 'FILL' 1;">movie</span>
+            </div>
+            <div>
+              <p class="font-bold text-on-surface">Netflix サブスクリプション</p>
+              <p class="text-xs text-on-surface-variant font-medium">エンタメ • 9月28日</p>
+            </div>
+          </div>
+          <p class="font-bold text-tertiary">-¥1,599</p>
+        </div>
       </div>
     </section>
 
-    <!-- 円グラフ -->
-    <section class="dashboard__section">
-      <h2 class="dashboard__heading">資産内訳</h2>
-      <div class="dashboard__chart-wrapper">
-        <Doughnut :data="chartData" :options="chartOptions" />
-      </div>
-    </section>
-
-    <section v-if="monthlyBudget > 0" class="dashboard__section dashboard__section--budget">
-      <div class="dashboard__budget-header">
-        <h2 class="dashboard__heading">今月の予算状況</h2>
-        <span class="dashboard__budget-remaining">残り {{ remainingBudget.toLocaleString() }}円</span>
-      </div>
-      <div class="dashboard__budget-progress-bg">
-        <div 
-          class="dashboard__budget-progress-bar" 
-          :style="{ width: `${budgetProgress}%`, backgroundColor: budgetProgress > 90 ? '#ef4444' : '#0d9488' }"
-        ></div>
-      </div>
-      <p class="dashboard__budget-detail">
-        予算 {{ monthlyBudget.toLocaleString() }}円 / 支出 {{ totalExpense.toLocaleString() }}円
-      </p>
-    </section>
-
-    <section class="dashboard__section dashboard__section--highlight">
-      <h2 class="dashboard__heading">今日使っていい金額</h2>
-      <p class="dashboard__today-amount">{{ todaySpendable.toLocaleString() }}円</p>
-      <p class="dashboard__today-message">{{ todaySpendableMessage }}</p>
-    </section>
-
-    <section class="dashboard__summary-grid">
-      <article class="dashboard__summary-card">
-        <h2 class="dashboard__summary-label">今月の収入合計</h2>
-        <p class="dashboard__summary-value dashboard__summary-value--income">{{ totalIncome.toLocaleString() }}円</p>
-      </article>
-      <article class="dashboard__summary-card">
-        <h2 class="dashboard__summary-label">今月の支出合計</h2>
-        <p class="dashboard__summary-value dashboard__summary-value--expense">{{ totalExpense.toLocaleString() }}円</p>
-      </article>
-    </section>
-
-    <section class="dashboard__section dashboard__section--month-picker">
-      <label class="dashboard__month-label">表示月</label>
-      <input v-model="monthInput" type="month" class="dashboard__month-input" />
-    </section>
-  </main>
+    <!-- Floating Action Button (Quick Add) -->
+    <router-link to="/entry" class="fixed bottom-28 right-6 w-16 h-16 bg-gradient-to-br from-primary to-primary-container text-white rounded-full shadow-[0_8px_24px_rgba(25,28,29,0.2)] flex items-center justify-center z-40 active:scale-95 transition-transform duration-200">
+      <span class="material-symbols-outlined text-3xl">add</span>
+    </router-link>
+  </div>
 </template>
-
-<style scoped>
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding-bottom: 2rem;
-}
-
-.dashboard__hero {
-  background: linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%);
-  color: #fff;
-  border-radius: 20px;
-  padding: 2rem 1.5rem;
-  text-align: center;
-  box-shadow: 0 8px 32px rgba(13, 148, 136, 0.3);
-}
-
-.dashboard__hero-label {
-  margin: 0 0 0.25rem 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-.dashboard__hero-amount {
-  margin: 0;
-  font-size: 2.75rem;
-  font-weight: 900;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-}
-
-.dashboard__hero-unit {
-  font-size: 1.25rem;
-  font-weight: 700;
-  margin-left: 0.15rem;
-}
-
-.dashboard__hero-sub {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  opacity: 0.9;
-}
-
-.dashboard__section {
-  background: var(--color-surface);
-  border-radius: 16px;
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.dashboard__section--highlight {
-  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
-  color: #fff;
-}
-
-.dashboard__budget-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.dashboard__budget-remaining {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #0d9488;
-}
-
-.dashboard__budget-progress-bg {
-  height: 10px;
-  background: #f1f5f9;
-  border-radius: 5px;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.dashboard__budget-progress-bar {
-  height: 100%;
-  transition: width 0.4s ease-out;
-}
-
-.dashboard__budget-detail {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #64748b;
-  text-align: right;
-}
-
-.dashboard__section--month-picker {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.dashboard__heading {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.dashboard__section--highlight .dashboard__heading {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.dashboard__chart-wrapper {
-  position: relative;
-  height: 280px;
-}
-
-.dashboard__today-amount {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-}
-
-.dashboard__today-message {
-  margin: 0.25rem 0 0 0;
-  font-size: 1rem;
-  opacity: 0.95;
-}
-
-.dashboard__summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.dashboard__summary-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem;
-}
-
-.dashboard__summary-label {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #64748b;
-}
-
-.dashboard__summary-value {
-  margin: 0.35rem 0 0;
-  font-size: 1.2rem;
-  font-weight: 800;
-}
-
-.dashboard__summary-value--income {
-  color: #059669;
-}
-
-.dashboard__summary-value--expense {
-  color: #dc2626;
-}
-
-.dashboard__month-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-}
-
-.dashboard__month-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font: inherit;
-}
-</style>
