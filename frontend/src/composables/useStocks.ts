@@ -2,12 +2,12 @@ import { computed, ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { sessionStore } from '@/stores/session'
 import type { Stock } from '@/types/db'
-// import {
-//   appendInvestmentToSheet,
-//   deleteInvestmentFromSheet,
-//   fetchInvestmentRowsFromSheet,
-//   type SheetInvestmentRow,
-// } from '@/services/sheetsService'
+import {
+  appendInvestmentToSheet,
+  deleteInvestmentFromSheet,
+  fetchInvestmentRowsFromSheet,
+  type SheetInvestmentRow,
+} from '@/services/sheetsService'
 
 type StockInput = {
   symbol: string
@@ -113,6 +113,23 @@ export function useStocks() {
     const { error } = await supabase.from('investments').insert(payload)
     if (error) throw error
 
+    // Google Sheets Sync
+    try {
+      await appendInvestmentToSheet({
+        type: (type === 'fund' ? 'fund' : 'stock'),
+        symbol: payload.symbol,
+        name: payload.name,
+        quantity: payload.quantity,
+        averagePrice: payload.average_price,
+        currentPrice: payload.current_price,
+        evaluationAmount: payload.evaluation_amount,
+        uid: userId
+      })
+    } catch (e) {
+      console.warn('Sheets sync failed:', e)
+      sheetError.value = 'スプレッドシートへの同期に失敗しましたが、DBへの登録は完了しました。'
+    }
+
     await fetchStocks()
   }
 
@@ -124,6 +141,19 @@ export function useStocks() {
 
     const { error } = await supabase.from('investments').delete().eq('id', id)
     if (error) throw error
+
+    // Google Sheets Sync
+    try {
+      await deleteInvestmentFromSheet(
+        target.symbol,
+        target.name,
+        (target.type === 'fund' ? 'fund' : 'stock'),
+        sessionStore.user?.id || ''
+      )
+    } catch (e) {
+      console.warn('Sheets delete failed:', e)
+    }
+
     stocks.value = stocks.value.filter((s) => s.id !== id)
   }
 

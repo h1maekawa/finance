@@ -16,7 +16,7 @@ function isActive(path: string) {
 </script>
 
 <template>
-  <div class="fixed bottom-8 inset-x-0 flex justify-center z-50 px-6">
+  <div class="fixed bottom-8 inset-x-0 flex justify-center z-50 px-6 max-w-[640px] mx-auto">
     <nav class="flex items-center gap-2 px-3 py-2 bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl rounded-[2rem] border border-outline-variant/10 shadow-[0_20px_50px_rgba(0,0,0,0.1)] transition-all duration-500 hover:shadow-[0_30px_60px_rgba(0,0,0,0.15)]">
       <router-link
         v-for="item in navItems"

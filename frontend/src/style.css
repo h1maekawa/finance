@@ -9,6 +9,15 @@
 }
 
 @layer components {
+  .mobile-shell {
+    @apply min-h-screen bg-surface-container-lowest relative;
+  }
+  
+  .mobile-main {
+    @apply w-full max-w-[640px] mx-auto px-6 pt-24 pb-32 min-h-screen relative bg-background;
+    box-shadow: 0 0 100px rgba(0,0,0,0.02);
+  }
+
   .card-premium {
     @apply bg-surface-container-lowest rounded-[2.5rem] p-6 shadow-sm border border-outline-variant/10 transition-all duration-300;
   }
@@ -24,6 +33,11 @@
   .text-premium-label {
     @apply font-label text-[11px] font-bold uppercase tracking-[0.15em] text-on-surface-variant;
   }
+}
+
+/* Base resets */
+body {
+  @apply bg-surface-container-lowest;
 }
 
 /* Custom scrollbar for a cleaner look */

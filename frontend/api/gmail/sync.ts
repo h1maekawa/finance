@@ -1,21 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { parseEmailBody } from '../lib/parser'
 
-// Service role key — server-side only, never exposed to the frontend
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-/**
- * POST /api/gmail/sync
- * Called by:
- *   - session.ts syncGmail() with Firebase ID token in Authorization header
- *   - /api/cron/gmail-sync with CRON_SECRET
- *
- * Query params:
- *   - userId (optional): only processed by cron calls; ignored for user calls
- */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -24,17 +15,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const authHeader = req.headers.authorization || ''
   let userId: string | null = null
 
-  // ① Cron path — CRON_SECRET in header, userId from query
   if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
     userId = (req.query.userId as string) || null
     if (!userId) {
       return res.status(400).json({ error: 'userId query param required for cron calls' })
     }
-  }
-  // ② User path — Firebase ID token; verify via Supabase admin (or trust sub claim)
-  else if (authHeader.startsWith('Bearer ')) {
+  } else if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.replace('Bearer ', '')
-    // Decode JWT sub without signature check (Firebase JWTs are verified by Supabase third-party auth)
     try {
       const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
       userId = payload.sub as string
@@ -45,7 +32,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  // Fetch Gmail token for this user
+  // Fetch Sync Filters for this user
+  const { data: filters } = await supabase
+    .from('gmail_sync_filters')
+    .select('sender_email, subject_filter')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+
+  // Fetch Gmail token
   const { data: tokenRow, error: tokenErr } = await supabase
     .from('gmail_tokens')
     .select('access_token, refresh_token, expires_at')
@@ -53,18 +47,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .single()
 
   if (tokenErr || !tokenRow) {
-    return res.status(404).json({ error: 'Gmail token not found. User must reconnect Gmail.' })
+    return res.status(404).json({ error: 'Gmail token not found.' })
   }
 
-  let accessToken: string = tokenRow.access_token
-
-  // Refresh token if expired
+  let accessToken = tokenRow.access_token
   const expired = new Date(tokenRow.expires_at).getTime() < Date.now() + 60_000
   if (expired && tokenRow.refresh_token) {
     const refreshed = await refreshAccessToken(tokenRow.refresh_token)
-    if (!refreshed.access_token) {
-      return res.status(403).json({ error: 'Failed to refresh Gmail access token' })
-    }
     accessToken = refreshed.access_token
     await supabase.from('gmail_tokens').update({
       access_token: accessToken,
@@ -72,24 +61,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }).eq('user_id', userId)
   }
 
-  // Get user's household
   const { data: member } = await supabase
     .from('household_members')
     .select('household_id')
     .eq('user_id', userId)
     .single()
 
-  if (!member) {
-    return res.status(404).json({ error: 'No household found for user' })
-  }
-
+  if (!member) return res.status(404).json({ error: 'No household found' })
   const householdId = member.household_id
 
-  // Fetch Gmail messages
-  const query = [
-    'from:statement@vpass.ne.jp subject:ご利用のお知らせ【三井住友カード】',
-    'from:info@mail.rakuten-card.co.jp subject:カード利用のお知らせ(本人ご利用分)',
-  ].join(' OR ') + ' newer_than:7d'
+  // Build Gmail Search Query
+  let query = ''
+  if (filters && filters.length > 0) {
+    query = filters.map(f => {
+      let q = `from:${f.sender_email}`
+      if (f.subject_filter) q += ` subject:${f.subject_filter}`
+      return `(${q})`
+    }).join(' OR ')
+  } else {
+    // Legacy fallback
+    query = '(from:statement@vpass.ne.jp subject:ご利用のお知らせ) OR (from:info@mail.rakuten-card.co.jp subject:カード利用のお知らせ)'
+  }
+  query += ' newer_than:7d'
 
   const msgRes = await fetch(
     `https://www.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}`,
@@ -101,19 +94,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ count: 0, results: [] })
   }
 
-  // Get default category
   const { data: defaultCat } = await supabase
     .from('categories')
     .select('id')
     .eq('household_id', householdId)
-    .eq('name', '日用品')
+    .eq('name', '食費') // Changed default to '食費' as it's common for store notifications
     .single()
 
   const results: any[] = []
-
   for (const msg of msgJson.messages) {
     try {
-      // Skip already processed (idempotency)
       const { data: existing } = await supabase
         .from('email_import_logs')
         .select('id, status')
@@ -126,13 +116,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
-      if (!detailRes.ok) {
-        console.error(`Failed to fetch message ${msg.id}: ${detailRes.statusText}`)
-        continue
-      }
       const detail = await detailRes.json() as any
-
-      const subject: string = detail.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || ''
+      const subject = detail.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || ''
       let body = ''
       if (detail.payload?.parts) {
         body = detail.payload.parts
@@ -142,48 +127,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body = Buffer.from(detail.payload.body.data, 'base64url').toString('utf-8')
       }
 
-      let parsed: { date: string; amount: number; merchant: string; card: 'smbc' | 'rakuten' } | null = null
-
-      // Refined SMBC Regex
-      if (subject.includes('三井住友カード')) {
-        const dateMatch = body.match(/利用日[:：]?\s*(\d{4})\/(\d{2})\/(\d{2})/) || body.match(/(\d{4})\/(\d{2})\/(\d{2})/)
-        const amtMatch = body.match(/利用金額[:：]?\s*([\d,]+)円/) || body.match(/(.+?)（.+?）[\t　 ]*([\d,]+)円/)
-        const merchantMatch = body.match(/利用店[:：]?\s*(.+)/) || (amtMatch && !amtMatch[1].match(/[\d,]+/) ? { 1: amtMatch[1] } : null)
-
-        if (dateMatch && amtMatch) {
-          parsed = {
-            date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-            merchant: merchantMatch ? merchantMatch[1].trim() : '不明な加盟店',
-            amount: parseInt((amtMatch[2] || amtMatch[1]).replace(/,/g, ''), 10),
-            card: 'smbc',
-          }
-        }
-      } 
-      // Refined Rakuten Regex
-      else if (subject.includes('楽天カード')) {
-        const dateMatch = body.match(/利用日[:：]?\s*(\d{4})年(\d{2})月(\d{2})日/) || body.match(/(\d{4})年(\d{2})月(\d{2})日/)
-        const merchantMatch = body.match(/利用先[:：]?\s*(.+)/) || body.match(/ご利用店名[：:]\s*(.+)/)
-        const amtMatch = body.match(/利用金額[:：]?\s*([\d,]+)円/) || body.match(/ご利用金額[：:]\s*([\d,]+)円/)
-        
-        if (dateMatch && merchantMatch && amtMatch) {
-          parsed = {
-            date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-            merchant: merchantMatch[1].trim(),
-            amount: parseInt(amtMatch[1].replace(/,/g, ''), 10),
-            card: 'rakuten',
-          }
-        }
-      }
+      const parsed = parseEmailBody(subject, body)
 
       if (!parsed) {
-        console.warn(`Failed to parse email ${msg.id}: ${subject}`)
         await supabase.from('email_import_logs').upsert({
           household_id: householdId,
           user_id: userId,
           gmail_message_id: msg.id,
-          card_type: subject.includes('三井住友') ? 'smbc' : 'rakuten',
+          card_type: 'unknown',
           transaction_date: new Date().toISOString().split('T')[0],
-          store_name: 'パース失敗',
+          store_name: '解析失敗',
           amount: 0,
           status: 'error',
           raw_subject: subject
@@ -191,13 +144,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         continue
       }
 
-      // Check for potential duplicate transactions (same date, amount, merchant) in last 24h
+      // De-duplicate check
       const { data: duplicateTx } = await supabase
         .from('transactions')
         .select('id')
         .eq('household_id', householdId)
         .eq('amount', parsed.amount)
-        .eq('transaction_date', parsed.date)
+        .eq('transaction_date', parsed.date.split(' ')[0])
         .ilike('note', `%${parsed.merchant}%`)
         .maybeSingle()
 
@@ -206,14 +159,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             household_id: householdId,
             user_id: userId,
             gmail_message_id: msg.id,
-            card_type: parsed.card,
-            transaction_date: parsed.date,
+            card_type: parsed.card_type,
+            transaction_date: parsed.date.split(' ')[0],
             store_name: parsed.merchant,
             amount: parsed.amount,
             status: 'skipped',
             raw_subject: subject
           }, { onConflict: 'gmail_message_id' })
-          results.push({ id: msg.id, status: 'skipped', merchant: parsed.merchant })
           continue
       }
 
@@ -225,8 +177,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           category_id: defaultCat?.id || null,
           kind: 'expense',
           amount: parsed.amount,
-          transaction_date: parsed.date,
-          note: `[Gmail] ${parsed.merchant}`,
+          transaction_date: parsed.date.split(' ')[0],
+          note: `[Auto] ${parsed.merchant}`,
         })
         .select()
         .single()
@@ -236,8 +188,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           household_id: householdId,
           user_id: userId,
           gmail_message_id: msg.id,
-          card_type: parsed.card,
-          transaction_date: parsed.date,
+          card_type: parsed.card_type,
+          transaction_date: parsed.date.split(' ')[0],
           store_name: parsed.merchant,
           amount: parsed.amount,
           category_id: defaultCat?.id || null,
@@ -245,12 +197,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           status: 'imported',
           raw_subject: subject
         }, { onConflict: 'gmail_message_id' })
-        results.push({ id: msg.id, status: 'success', merchant: parsed.merchant })
-      } else {
-        console.error('Failed to insert transaction:', txErr)
+        results.push({ id: msg.id, status: 'success' })
       }
     } catch (e) {
-      console.error(`Error processing message ${msg.id}:`, e)
+      console.error(`Error processing ${msg.id}:`, e)
     }
   }
 

@@ -15,6 +15,7 @@ const {
   addStock,
   deleteStock,
   updateFundPrice,
+  sheetError,
 } = useStocks()
 
 const { currentHouseholdId } = useHousehold()
@@ -256,6 +257,25 @@ async function handleSaveFundPrice(id: string) {
   }
 }
 
+import { triggerGmailImportOnGas } from '@/services/sheetsService'
+const triggeringGasImport = ref(false)
+
+async function handleGasImport() {
+  triggeringGasImport.value = true
+  try {
+    const res = await triggerGmailImportOnGas()
+    if (res.ok) {
+       alert('GAS側でのGmail取り込み依頼を送信しました。')
+    } else {
+       alert('GASエラー: ' + (res.error || '不明なエラー'))
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。')
+  } finally {
+    triggeringGasImport.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchStocks()
   void fetchLivePrices()
@@ -286,14 +306,29 @@ watch(
         <li v-for="err in updateErrors" :key="err">{{ err }}</li>
       </ul>
       <p v-if="formError" class="stocks-view__error">{{ formError }}</p>
+      <div v-if="sheetError" class="stocks-view__sheet-error animate-in slide-in-from-top fill-mode-forwards">
+        <span class="material-symbols-outlined text-[18px]">sync_problem</span>
+        <p>{{ sheetError }}</p>
+      </div>
     </section>
 
-    <section class="card stocks-view__register">
-      <h3 style="margin: 0;">投資銘柄登録</h3>
-      <button type="button" @click="showAddModal = true">登録</button>
+    <!-- Sheets integration UI -->
+    <section class="card stocks-view__sheet-sync">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 style="margin: 0;">スプレッドシート連携 (GAS)</h3>
+          <p class="stocks-view__metric-label">外部スプレッドシートへの同期とカードメール取込</p>
+        </div>
+        <button 
+          class="stocks-view__gas-btn" 
+          @click="handleGasImport" 
+          :disabled="triggeringGasImport"
+        >
+          <span class="material-symbols-outlined text-sm">cycle</span>
+          {{ triggeringGasImport ? '実行中...' : 'Gmail取込(GAS)' }}
+        </button>
+      </div>
     </section>
-
-    <!-- Sheets integration UI removed -->
 
     <div v-if="showAddModal" class="stocks-view__modal-overlay" @click.self="showAddModal = false">
       <section class="stocks-view__modal card">
@@ -620,6 +655,28 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.stocks-view__sheet-sync {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+}
+
+.stocks-view__gas-btn {
+  @apply bg-surface-container-highest text-on-surface text-xs font-bold px-4 py-2 rounded-full flex items-center gap-2 hover:bg-surface-container transition-colors;
+}
+
+.stocks-view__sheet-error {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(254, 226, 226, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 1rem;
+  color: #fecaca;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
 }
 
 .stocks-view__modal-overlay {
