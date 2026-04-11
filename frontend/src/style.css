@@ -7,3 +7,37 @@
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   }
 }
+
+@layer components {
+  .card-premium {
+    @apply bg-surface-container-lowest rounded-[2.5rem] p-6 shadow-sm border border-outline-variant/10 transition-all duration-300;
+  }
+  
+  .card-premium-interactive {
+    @apply card-premium active:scale-[0.98] cursor-pointer hover:shadow-md;
+  }
+
+  .text-premium-headline {
+    @apply font-headline font-extrabold tracking-tight text-on-surface;
+  }
+
+  .text-premium-label {
+    @apply font-label text-[11px] font-bold uppercase tracking-[0.15em] text-on-surface-variant;
+  }
+}
+
+/* Custom scrollbar for a cleaner look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.1);
+}

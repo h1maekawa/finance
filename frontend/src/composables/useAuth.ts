@@ -24,8 +24,17 @@ export function useAuth() {
     }
     subscribed = true
 
+    // Global unauthorized listener (from supabase.ts)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:unauthorized', () => {
+        console.log('Unauthorized event received, signing out...')
+        signOut()
+      })
+    }
+
     return new Promise((resolve) => {
-      onAuthStateChanged(firebaseAuth, (user: import('firebase/auth').User | null) => {
+      // onIdTokenChanged is more robust than onAuthStateChanged for session persistence
+      firebaseAuth.onIdTokenChanged(async (user: import('firebase/auth').User | null) => {
         if (user) {
           sessionStore.user = mapFirebaseUserToAuthUser(user)
         } else {

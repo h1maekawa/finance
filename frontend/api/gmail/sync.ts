@@ -112,87 +112,145 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const results: any[] = []
 
   for (const msg of msgJson.messages) {
-    // Skip already imported
-    const { data: existing } = await supabase
-      .from('email_import_logs')
-      .select('id')
-      .eq('gmail_message_id', msg.id)
-      .maybeSingle()
-    if (existing) continue
+    try {
+      // Skip already processed (idempotency)
+      const { data: existing } = await supabase
+        .from('email_import_logs')
+        .select('id, status')
+        .eq('gmail_message_id', msg.id)
+        .maybeSingle()
+      
+      if (existing && existing.status === 'imported') continue
 
-    const detailRes = await fetch(
-      `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    )
-    const detail = await detailRes.json() as any
+      const detailRes = await fetch(
+        `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      if (!detailRes.ok) {
+        console.error(`Failed to fetch message ${msg.id}: ${detailRes.statusText}`)
+        continue
+      }
+      const detail = await detailRes.json() as any
 
-    const subject: string = detail.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || ''
-    let body = ''
-    if (detail.payload?.parts) {
-      body = detail.payload.parts
-        .map((p: any) => (p.body?.data ? Buffer.from(p.body.data, 'base64url').toString('utf-8') : ''))
-        .join('')
-    } else if (detail.payload?.body?.data) {
-      body = Buffer.from(detail.payload.body.data, 'base64url').toString('utf-8')
-    }
+      const subject: string = detail.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || ''
+      let body = ''
+      if (detail.payload?.parts) {
+        body = detail.payload.parts
+          .map((p: any) => (p.body?.data ? Buffer.from(p.body.data, 'base64url').toString('utf-8') : ''))
+          .join('')
+      } else if (detail.payload?.body?.data) {
+        body = Buffer.from(detail.payload.body.data, 'base64url').toString('utf-8')
+      }
 
-    let parsed: { date: string; amount: number; merchant: string; card: 'smbc' | 'rakuten' } | null = null
+      let parsed: { date: string; amount: number; merchant: string; card: 'smbc' | 'rakuten' } | null = null
 
-    if (subject.includes('三井住友カード')) {
-      const dateMatch = body.match(/(\d{4})\/(\d{2})\/(\d{2})/)
-      const amtMatch = body.match(/(.+?)（.+?）[\t　 ]*([\d,]+)円/)
-      if (dateMatch && amtMatch) {
-        parsed = {
-          date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-          merchant: amtMatch[1].trim(),
-          amount: parseInt(amtMatch[2].replace(/,/g, ''), 10),
-          card: 'smbc',
+      // Refined SMBC Regex
+      if (subject.includes('三井住友カード')) {
+        const dateMatch = body.match(/利用日[:：]?\s*(\d{4})\/(\d{2})\/(\d{2})/) || body.match(/(\d{4})\/(\d{2})\/(\d{2})/)
+        const amtMatch = body.match(/利用金額[:：]?\s*([\d,]+)円/) || body.match(/(.+?)（.+?）[\t　 ]*([\d,]+)円/)
+        const merchantMatch = body.match(/利用店[:：]?\s*(.+)/) || (amtMatch && !amtMatch[1].match(/[\d,]+/) ? { 1: amtMatch[1] } : null)
+
+        if (dateMatch && amtMatch) {
+          parsed = {
+            date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+            merchant: merchantMatch ? merchantMatch[1].trim() : '不明な加盟店',
+            amount: parseInt((amtMatch[2] || amtMatch[1]).replace(/,/g, ''), 10),
+            card: 'smbc',
+          }
+        }
+      } 
+      // Refined Rakuten Regex
+      else if (subject.includes('楽天カード')) {
+        const dateMatch = body.match(/利用日[:：]?\s*(\d{4})年(\d{2})月(\d{2})日/) || body.match(/(\d{4})年(\d{2})月(\d{2})日/)
+        const merchantMatch = body.match(/利用先[:：]?\s*(.+)/) || body.match(/ご利用店名[：:]\s*(.+)/)
+        const amtMatch = body.match(/利用金額[:：]?\s*([\d,]+)円/) || body.match(/ご利用金額[：:]\s*([\d,]+)円/)
+        
+        if (dateMatch && merchantMatch && amtMatch) {
+          parsed = {
+            date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
+            merchant: merchantMatch[1].trim(),
+            amount: parseInt(amtMatch[1].replace(/,/g, ''), 10),
+            card: 'rakuten',
+          }
         }
       }
-    } else if (subject.includes('楽天カード')) {
-      const dateMatch = body.match(/(\d{4})年(\d{2})月(\d{2})日/)
-      const merchantMatch = body.match(/ご利用店名[：:]\s*(.+)/)
-      const amtMatch = body.match(/ご利用金額[：:]\s*([\d,]+)円/)
-      if (dateMatch && merchantMatch && amtMatch) {
-        parsed = {
-          date: `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`,
-          merchant: merchantMatch[1].trim(),
-          amount: parseInt(amtMatch[1].replace(/,/g, ''), 10),
-          card: 'rakuten',
-        }
+
+      if (!parsed) {
+        console.warn(`Failed to parse email ${msg.id}: ${subject}`)
+        await supabase.from('email_import_logs').upsert({
+          household_id: householdId,
+          user_id: userId,
+          gmail_message_id: msg.id,
+          card_type: subject.includes('三井住友') ? 'smbc' : 'rakuten',
+          transaction_date: new Date().toISOString().split('T')[0],
+          store_name: 'パース失敗',
+          amount: 0,
+          status: 'error',
+          raw_subject: subject
+        }, { onConflict: 'gmail_message_id' })
+        continue
       }
-    }
 
-    if (!parsed) continue
+      // Check for potential duplicate transactions (same date, amount, merchant) in last 24h
+      const { data: duplicateTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('household_id', householdId)
+        .eq('amount', parsed.amount)
+        .eq('transaction_date', parsed.date)
+        .ilike('note', `%${parsed.merchant}%`)
+        .maybeSingle()
 
-    const { data: txData, error: txErr } = await supabase
-      .from('transactions')
-      .insert({
-        household_id: householdId,
-        user_id: userId,
-        category_id: defaultCat?.id || null,
-        kind: 'expense',
-        amount: parsed.amount,
-        transaction_date: parsed.date,
-        note: `[Gmail] ${parsed.merchant}`,
-      })
-      .select()
-      .single()
+      if (duplicateTx) {
+          await supabase.from('email_import_logs').upsert({
+            household_id: householdId,
+            user_id: userId,
+            gmail_message_id: msg.id,
+            card_type: parsed.card,
+            transaction_date: parsed.date,
+            store_name: parsed.merchant,
+            amount: parsed.amount,
+            status: 'skipped',
+            raw_subject: subject
+          }, { onConflict: 'gmail_message_id' })
+          results.push({ id: msg.id, status: 'skipped', merchant: parsed.merchant })
+          continue
+      }
 
-    if (!txErr) {
-      await supabase.from('email_import_logs').insert({
-        household_id: householdId,
-        user_id: userId,
-        gmail_message_id: msg.id,
-        card_type: parsed.card,
-        transaction_date: parsed.date,
-        store_name: parsed.merchant,
-        amount: parsed.amount,
-        category_id: defaultCat?.id || null,
-        transaction_id: txData.id,
-        status: 'imported',
-      })
-      results.push({ id: msg.id, status: 'success', merchant: parsed.merchant })
+      const { data: txData, error: txErr } = await supabase
+        .from('transactions')
+        .insert({
+          household_id: householdId,
+          user_id: userId,
+          category_id: defaultCat?.id || null,
+          kind: 'expense',
+          amount: parsed.amount,
+          transaction_date: parsed.date,
+          note: `[Gmail] ${parsed.merchant}`,
+        })
+        .select()
+        .single()
+
+      if (!txErr) {
+        await supabase.from('email_import_logs').upsert({
+          household_id: householdId,
+          user_id: userId,
+          gmail_message_id: msg.id,
+          card_type: parsed.card,
+          transaction_date: parsed.date,
+          store_name: parsed.merchant,
+          amount: parsed.amount,
+          category_id: defaultCat?.id || null,
+          transaction_id: txData.id,
+          status: 'imported',
+          raw_subject: subject
+        }, { onConflict: 'gmail_message_id' })
+        results.push({ id: msg.id, status: 'success', merchant: parsed.merchant })
+      } else {
+        console.error('Failed to insert transaction:', txErr)
+      }
+    } catch (e) {
+      console.error(`Error processing message ${msg.id}:`, e)
     }
   }
 

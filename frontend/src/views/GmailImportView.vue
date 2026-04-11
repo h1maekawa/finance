@@ -20,95 +20,139 @@ onMounted(async () => {
   await fetchImportLogs()
 })
 
-const statusColor: Record<string, string> = {
-  imported: 'text-secondary',
-  skipped: 'text-on-surface-variant',
-  error: 'text-error',
-}
-
-const statusLabel: Record<string, string> = {
-  imported: '取込済',
-  skipped: 'スキップ',
-  error: 'エラー',
+const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
+  imported: { bg: 'bg-secondary-container/50', text: 'text-on-secondary-container', label: '取込済' },
+  skipped: { bg: 'bg-surface-container-high/50', text: 'text-on-surface-variant', label: '重複スキップ' },
+  error: { bg: 'bg-error-container/50', text: 'text-on-error-container', label: 'エラー' },
 }
 
 function fmt(n: number) {
-  return `¥${n.toLocaleString()}`
+  return `¥${Math.floor(n).toLocaleString()}`
 }
 
 const cardLabel: Record<string, string> = {
-  smbc: '三井住友カード',
-  rakuten: '楽天カード',
+  smbc: '三井住友',
+  rakuten: '楽天',
 }
 </script>
 
 <template>
-  <div class="space-y-5 pb-28">
-    <section>
-      <p class="font-label text-[11px] text-on-surface-variant font-semibold uppercase tracking-widest">メール連携</p>
-      <h1 class="text-3xl font-extrabold tracking-tight text-on-surface font-headline mt-1">Gmail取込</h1>
+  <div class="space-y-8 pb-32 animate-in fade-in duration-700">
+    <section class="space-y-1 px-1">
+      <p class="text-premium-label">自動取込設定</p>
+      <h1 class="text-premium-headline text-3xl">Gmail連携</h1>
     </section>
 
-    <!-- Status card -->
-    <div class="bg-surface-container-lowest rounded-[2rem] p-6 border border-outline-variant/10 shadow-sm space-y-4">
-      <div class="flex items-center gap-3">
-        <div :class="['w-12 h-12 rounded-2xl flex items-center justify-center', isGmailLinked ? 'bg-secondary-container' : 'bg-surface-container']">
-          <span class="material-symbols-outlined text-2xl" :class="isGmailLinked ? 'text-on-secondary-container' : 'text-on-surface-variant'" style="font-variation-settings: 'FILL' 1;">mail</span>
+    <!-- Sync Controls Card -->
+    <div class="card-premium relative overflow-hidden space-y-6">
+      <div class="absolute -right-10 -top-10 w-40 h-40 bg-primary/5 rounded-full blur-3xl"></div>
+      
+      <div class="flex items-center gap-4 relative z-10">
+        <div :class="['w-16 h-16 rounded-[1.5rem] flex items-center justify-center transition-all duration-500', isGmailLinked ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant']">
+          <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">
+            {{ isGmailLinked ? 'mail' : 'mail_lock' }}
+          </span>
         </div>
-        <div>
-          <p class="font-bold text-on-surface">Gmail連携状態</p>
-          <p :class="['text-sm font-medium', isGmailLinked ? 'text-secondary' : 'text-on-surface-variant']">
-            {{ isGmailLinked ? '連携済み・取込可能' : '未連携' }}
+        <div class="space-y-0.5">
+          <p class="text-premium-headline text-xl">Gmail連携 {{ isGmailLinked ? '完了' : '未設定' }}</p>
+          <p class="text-premium-label !normal-case !opacity-60">
+            {{ isGmailLinked ? '毎時間の自動取込が有効です' : '連携してカード明細を自動化しましょう' }}
           </p>
         </div>
       </div>
 
-      <button
-        @click="triggerGmailImport"
-        :disabled="importing || !isGmailLinked"
-        class="w-full flex items-center justify-center gap-2 py-3 bg-primary text-on-primary rounded-2xl font-bold text-sm active:scale-95 transition-transform disabled:opacity-50"
-      >
-        <span class="material-symbols-outlined text-[18px]" :class="importing ? 'animate-spin' : ''">{{ importing ? 'progress_activity' : 'sync' }}</span>
-        {{ importing ? '取込中...' : '今すぐ取込む' }}
-      </button>
-
-      <p v-if="importMessage" class="text-sm text-secondary text-center font-medium">✅ {{ importMessage }}</p>
-      <p v-if="importError" class="text-sm text-error text-center font-medium">❌ {{ importError }}</p>
-    </div>
-
-    <!-- Info box -->
-    <div class="bg-surface-container-low rounded-2xl p-4 text-sm text-on-surface-variant space-y-1">
-      <p class="font-bold text-on-surface text-xs uppercase tracking-wider font-label">対応カード</p>
-      <p>• 三井住友カード（ご利用通知メール）</p>
-      <p>• 楽天カード（カード利用のお知らせ）</p>
-      <p class="mt-2 text-xs">直近7日間のメールを自動取込します。毎時間自動実行もされます。</p>
-    </div>
-
-    <!-- Log list -->
-    <section class="space-y-3">
-      <h2 class="text-lg font-bold font-headline">取込ログ</h2>
-      <div v-if="importLogs.length === 0" class="text-center py-8 text-on-surface-variant text-sm bg-surface-container-lowest rounded-2xl">
-        取込ログがありません
+      <div class="grid grid-cols-1 gap-3 relative z-10">
+        <button
+          @click="triggerGmailImport"
+          :disabled="importing || !isGmailLinked"
+          class="w-full h-14 bg-primary text-on-primary rounded-[1.25rem] font-bold active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:grayscale shadow-lg shadow-primary/20"
+        >
+          <span class="material-symbols-outlined text-2xl" :class="{ 'animate-spin': importing }">
+            {{ importing ? 'progress_activity' : 'sync' }}
+          </span>
+          <span>{{ importing ? '取込を実行中...' : '今すぐ同期する' }}</span>
+        </button>
+        
+        <p v-if="importMessage" class="text-center text-sm font-bold text-secondary animate-in fade-in py-2">
+          {{ importMessage }}
+        </p>
+        <p v-if="importError" class="text-center text-sm font-bold text-error animate-in fade-in py-2">
+          {{ importError }}
+        </p>
       </div>
-      <div v-else class="space-y-2">
+    </div>
+
+    <!-- Supported Cards Info -->
+    <section class="px-1 grid grid-cols-2 gap-4">
+      <div class="p-4 bg-surface-container-low/50 rounded-[1.5rem] border border-outline-variant/10">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="material-symbols-outlined text-primary text-xl">credit_card</span>
+          <p class="text-premium-headline text-sm">対応カード</p>
+        </div>
+        <ul class="text-[12px] text-on-surface-variant space-y-1 font-medium">
+          <li>• 三井住友カード</li>
+          <li>• 楽天カード</li>
+        </ul>
+      </div>
+      <div class="p-4 bg-surface-container-low/50 rounded-[1.5rem] border border-outline-variant/10">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="material-symbols-outlined text-secondary text-xl">schedule</span>
+          <p class="text-premium-headline text-sm">自動スケジューラ</p>
+        </div>
+        <p class="text-[12px] text-on-surface-variant leading-relaxed font-medium">
+          1時間ごとにバックグラウンドで新しい明細をチェックします。
+        </p>
+      </div>
+    </section>
+
+    <!-- Import Logs -->
+    <section class="space-y-6 px-1">
+      <h2 class="text-premium-headline text-2xl">履歴</h2>
+      
+      <div v-if="importLogs.length === 0" class="text-center py-20 card-premium !bg-transparent border-dashed">
+        <span class="material-symbols-outlined text-4xl text-outline-variant mb-3">history</span>
+        <p class="text-on-surface-variant text-sm font-medium">取込履歴はまだありません</p>
+      </div>
+
+      <div v-else class="space-y-4">
         <div
           v-for="log in importLogs"
           :key="log.id"
-          class="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/10"
+          class="card-premium !p-4 flex items-center justify-between hover:bg-surface-container-lowest active:scale-[0.99] transition-all"
         >
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
-                <span :class="['text-xs font-bold', statusColor[log.status]]">{{ statusLabel[log.status] }}</span>
-                <span class="text-xs text-on-surface-variant">{{ cardLabel[log.card_type] || log.card_type }}</span>
-              </div>
-              <p class="font-bold text-on-surface mt-1 truncate">{{ log.store_name }}</p>
-              <p class="text-xs text-on-surface-variant mt-0.5">{{ log.transaction_date }}</p>
+          <div class="flex items-center gap-4 min-w-0">
+            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', statusStyles[log.status]?.bg || 'bg-surface-container']">
+              <span class="material-symbols-outlined text-xl" :class="statusStyles[log.status]?.text">
+                {{ log.status === 'imported' ? 'check_circle' : (log.status === 'error' ? 'error' : 'block') }}
+              </span>
             </div>
-            <p class="font-bold text-tertiary flex-shrink-0">{{ fmt(log.amount) }}</p>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 mb-0.5">
+                 <span class="text-premium-label !text-[10px]">{{ cardLabel[log.card_type] || log.card_type }}</span>
+                 <div class="w-1 h-1 rounded-full bg-outline-variant"></div>
+                 <span :class="['text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase', statusStyles[log.status]?.text, statusStyles[log.status]?.bg]">
+                   {{ statusStyles[log.status]?.label }}
+                 </span>
+              </div>
+              <p class="font-bold text-on-surface truncate">{{ log.store_name }}</p>
+              <p class="text-premium-label !normal-case !opacity-60 text-[10px]">{{ log.transaction_date }}</p>
+            </div>
           </div>
+          <p class="text-tertiary font-extrabold text-sm whitespace-nowrap ml-4">
+            {{ log.amount > 0 ? fmt(log.amount) : '-' }}
+          </p>
         </div>
       </div>
     </section>
   </div>
 </template>
+
+<style scoped>
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+</style>
