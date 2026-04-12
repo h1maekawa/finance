@@ -31,25 +31,39 @@ export function useAssetBreakdown(householdId: () => string | null) {
     }
 
     loading.value = true
-    const { data, error } = await supabase
+    
+    // Fetch manual breakdown
+    const { data: assetData, error: assetError } = await supabase
       .from('household_assets')
       .select('stocks, funds, cash, account')
       .eq('household_id', hid)
       .maybeSingle()
 
-    loading.value = false
-    if (error) throw error
+    if (assetError) throw assetError
 
-    if (!data) {
-      state.value = { ...defaults }
-      return
-    }
+    // Fetch automated totals from investments
+    const { data: invData, error: invError } = await supabase
+        .from('investments')
+        .select('type, evaluation_amount')
+        .eq('user_id', hid) // Assuming household_id maps to user_id here or we use session
+
+    if (invError) throw invError
+
+    const autoStocks = invData
+        ?.filter(i => i.type !== 'fund')
+        .reduce((sum, i) => sum + (Number(i.evaluation_amount) || 0), 0) || 0
+    
+    const autoFunds = invData
+        ?.filter(i => i.type === 'fund')
+        .reduce((sum, i) => sum + (Number(i.evaluation_amount) || 0), 0) || 0
+
+    loading.value = false
 
     state.value = {
-      stocks: Number(data.stocks ?? 0),
-      funds: Number(data.funds ?? 0),
-      cash: Number(data.cash ?? 0),
-      account: Number(data.account ?? 0),
+      stocks: autoStocks,
+      funds: autoFunds,
+      cash: Number(assetData?.cash ?? 0),
+      account: Number(assetData?.account ?? 0),
     }
   }
 

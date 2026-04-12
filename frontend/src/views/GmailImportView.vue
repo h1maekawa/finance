@@ -155,6 +155,23 @@ async function handleSaveManual() {
     isSaving.value = false
   }
 }
+
+async function handleGasImportShortcut() {
+  importing.value = true
+  try {
+    const res = await triggerGmailImportOnGas()
+    if (res.ok) {
+       alert('GAS側でのGmail取り込み依頼を送信しました。')
+    } else {
+       alert('GASエラー: ' + (res.error || '不明なエラー'))
+    }
+  } catch (e) {
+    console.error(e)
+    alert('通信エラーが発生しました。')
+  } finally {
+    importing.value = false
+  }
+}
 </script>
 
 <template>
@@ -209,16 +226,44 @@ async function handleSaveManual() {
         </div>
 
         <div class="grid grid-cols-1 gap-3 relative z-10">
-          <button
-            @click="triggerGmailImport"
-            :disabled="importing || !isGmailLinked"
-            class="w-full h-14 bg-primary text-on-primary rounded-[1.25rem] font-bold active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:grayscale shadow-lg shadow-primary/20"
-          >
-            <span class="material-symbols-outlined text-2xl" :class="{ 'animate-spin': importing }">
-              {{ importing ? 'progress_activity' : 'sync' }}
-            </span>
-            <span>{{ importing ? '取込を実行中...' : '今すぐ同期する' }}</span>
-          </button>
+          <template v-if="isGmailLinked">
+            <button
+              @click="triggerGmailImport"
+              :disabled="importing"
+              class="w-full h-14 bg-primary text-on-primary rounded-[1.25rem] font-bold active:scale-[0.97] transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:grayscale shadow-lg shadow-primary/20"
+            >
+              <span class="material-symbols-outlined text-2xl" :class="{ 'animate-spin': importing }">
+                {{ importing ? 'progress_activity' : 'sync' }}
+              </span>
+              <span>{{ importing ? '取込を実行中...' : '今すぐ同期する' }}</span>
+            </button>
+          </template>
+          <template v-else>
+            <div class="p-4 bg-surface-container-highest rounded-2xl space-y-3">
+              <p class="text-xs text-on-surface-variant leading-relaxed">
+                自動同期を利用するには、Googleアカウントの連携とサーバー側の設定（Cron）が必要です。
+              </p>
+              <button
+                class="w-full h-12 bg-on-surface text-surface rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+                @click="alert('管理画面からGoogle認証を実行してください（現在開発者モードのみ利用可能）')"
+              >
+                <span class="material-symbols-outlined text-xl">login</span>
+                Googleアカウントを連携
+              </button>
+            </div>
+          </template>
+
+          <!-- GAS Sync Shortcut -->
+          <div class="pt-4 border-t border-outline-variant/10">
+            <p class="text-[10px] font-bold text-on-surface-variant mb-2">OTHER OPTIONS</p>
+            <button 
+              @click="handleGasImportShortcut"
+              class="w-full h-12 border border-outline-variant/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-surface-container transition-colors"
+            >
+              <span class="material-symbols-outlined text-lg">description</span>
+              スプレッドシート(GAS)から取込
+            </button>
+          </div>
         </div>
       </div>
 
