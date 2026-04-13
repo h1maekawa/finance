@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useHousehold } from '@/composables/useHousehold'
+import { useAssetBreakdown } from '@/composables/useAssetBreakdown'
 import { useEmailImport } from '@/composables/useEmailImport'
 import { triggerGmailImportOnGas } from '@/services/sheetsService'
 
