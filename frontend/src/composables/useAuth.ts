@@ -62,6 +62,7 @@ export function useAuth() {
   }
 
   async function signInWithGoogle() {
+    console.log('signInWithGoogle started...')
     loading.value = true
     try {
       const provider = new GoogleAuthProvider()
@@ -71,17 +72,23 @@ export function useAuth() {
         access_type: 'offline'
       })
 
+      console.log('Opening Firebase signInWithPopup...')
       const result = await signInWithPopup(firebaseAuth, provider)
+      console.log('SignIn result received:', result.user.email)
+      
       const credential = GoogleAuthProvider.credentialFromResult(result)
       
       if (credential?.accessToken) {
+        console.log('Saving Gmail token...')
         await saveGmailToken(result.user.uid, credential.accessToken)
       }
 
       // Trigger Gmail sync in background after login
-      syncGmail().catch(() => {})
-    } catch (authError) {
+      console.log('Starting background Gmail sync...')
+      syncGmail().catch((e) => console.error('Background sync failed:', e))
+    } catch (authError: any) {
       console.error('Failed to sign in with Google:', authError)
+      throw authError // Re-throw to show in UI
     } finally {
       loading.value = false
     }
