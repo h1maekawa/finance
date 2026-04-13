@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { authenticateRequest } from '../lib/auth'
 import { parseEmailBody } from '../lib/parser'
 
 const supabase = createClient(
@@ -20,16 +21,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!userId) {
       return res.status(400).json({ error: 'userId query param required for cron calls' })
     }
-  } else if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '')
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
-      userId = payload.sub as string
-    } catch {
-      return res.status(401).json({ error: 'Invalid token' })
-    }
   } else {
-    return res.status(401).json({ error: 'Unauthorized' })
+    try {
+      const payload = await authenticateRequest(authHeader)
+      userId = payload.sub as string
+    } catch (err: any) {
+      console.error('Auth error:', err.message)
+      return res.status(401).json({ error: err.message || 'Unauthorized' })
+    }
   }
 
   // Fetch Sync Filters for this user
