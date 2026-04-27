@@ -7,6 +7,7 @@ import { useCategories } from '@/composables/useCategories'
 import { AIExtractionService, type ExtractedTransaction } from '@/services/aiExtractionService'
 import { sessionStore } from '@/stores/session'
 import { supabase } from '@/lib/supabase'
+import { firebaseAuth } from '@/lib/firebase'
 
 const { currentHouseholdId } = useHousehold()
 const {
@@ -55,7 +56,7 @@ onMounted(async () => {
 })
 
 async function fetchFilters() {
-  const uid = sessionStore.user?.uid
+  const uid = sessionStore.user?.id
   if (!uid) return
   loadingFilters.value = true
   const { data } = await supabase.from('gmail_sync_filters').select('*').eq('user_id', uid)
@@ -64,7 +65,7 @@ async function fetchFilters() {
 }
 
 async function handleAddFilter(template?: typeof templates[0]) {
-  const uid = sessionStore.user?.uid
+  const uid = sessionStore.user?.id
   if (!uid) return
   
   const payload = template 
@@ -120,7 +121,7 @@ async function handleExtract() {
 
 async function handleSaveManual() {
   const hid = currentHouseholdId.value
-  const uid = sessionStore.user?.uid
+  const uid = sessionStore.user?.id
   if (!hid || !uid) return
 
   isSaving.value = true
@@ -159,11 +160,25 @@ async function handleSaveManual() {
 async function handleGasImportShortcut() {
   importing.value = true
   try {
-    const res = await triggerGmailImportOnGas()
+    const user = firebaseAuth.currentUser
+    if (!user) {
+      alert('ログインが必要です')
+      return
+    }
+    const idToken = await user.getIdToken()
+    const res = await fetch('/api/gas', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ action: 'gmail_import' }),
+    })
+    const json = await res.json()
     if (res.ok) {
-       alert('GAS側でのGmail取り込み依頼を送信しました。')
+      alert('GAS側でのGmail取り込み依頼を送信しました。')
     } else {
-       alert('GASエラー: ' + (res.error || '不明なエラー'))
+      alert('GASエラー: ' + (json.error || '不明なエラー'))
     }
   } catch (e) {
     console.error(e)
@@ -171,6 +186,10 @@ async function handleGasImportShortcut() {
   } finally {
     importing.value = false
   }
+}
+
+function showGmailAuthAlert() {
+  alert('管理画面からGoogle認証を実行してください（現在開発者モードのみ利用可能）')
 }
 </script>
 
@@ -245,7 +264,7 @@ async function handleGasImportShortcut() {
               </p>
               <button
                 class="w-full h-12 bg-on-surface text-surface rounded-xl font-bold text-sm flex items-center justify-center gap-2"
-                @click="alert('管理画面からGoogle認証を実行してください（現在開発者モードのみ利用可能）')"
+                @click="showGmailAuthAlert"
               >
                 <span class="material-symbols-outlined text-xl">login</span>
                 Googleアカウントを連携

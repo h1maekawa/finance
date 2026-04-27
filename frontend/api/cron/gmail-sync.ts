@@ -14,7 +14,8 @@ const supabase = createClient(
  * Authorization: Bearer {CRON_SECRET}
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
+  // Vercel Crons call with GET; also allow POST for manual triggers
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 

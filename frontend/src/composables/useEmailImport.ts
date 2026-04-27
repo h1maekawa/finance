@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { firebaseAuth } from '@/lib/firebase'
+import { sessionStore } from '@/stores/session'
 import type { EmailImportLog } from '@/types/db'
 
 export function useEmailImport(householdId: () => string | null) {
@@ -11,10 +12,13 @@ export function useEmailImport(householdId: () => string | null) {
     const isGmailLinked = ref(false)
 
     async function checkGmailLinked() {
+        const uid = sessionStore.user?.id ?? firebaseAuth.currentUser?.uid
+        if (!uid) { isGmailLinked.value = false; return }
         try {
             const { data } = await supabase
                 .from('gmail_tokens')
                 .select('expires_at')
+                .eq('user_id', uid)
                 .gt('expires_at', new Date().toISOString())
                 .maybeSingle()
             

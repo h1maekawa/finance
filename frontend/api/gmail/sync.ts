@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let accessToken = tokenRow.access_token
-  const expired = new Date(tokenRow.expires_at).getTime() < Date.now() + 60_000
+  const expired = new Date(tokenRow.expires_at).getTime() < Date.now() - 60_000
   if (expired && tokenRow.refresh_token) {
     const refreshed = await refreshAccessToken(tokenRow.refresh_token)
     accessToken = refreshed.access_token

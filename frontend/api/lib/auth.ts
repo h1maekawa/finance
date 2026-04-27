@@ -10,9 +10,9 @@ const JWKS = createRemoteJWKSet(new URL(GOOGLE_CERTS_URL))
  * Firebase IDトークンを検証し、ペイロードを返すユーティリティ
  */
 export async function verifyFirebaseIdToken(token: string) {
-  const projectId = process.env.VITE_FIREBASE_PROJECT_ID
+  const projectId = process.env.FIREBASE_PROJECT_ID
   if (!projectId) {
-    throw new Error('VITE_FIREBASE_PROJECT_ID is not configured in environment variables')
+    throw new Error('FIREBASE_PROJECT_ID is not configured in environment variables')
   }
 
   try {
