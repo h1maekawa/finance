@@ -19,15 +19,34 @@ const defaultCategories: Category[] = [
 ]
 
 export function useCategories(_uid?: string) {
-  const categories = ref<Category[]>(defaultCategories)
+  const categories = ref<Category[]>([...defaultCategories])
   const loading = ref(false)
 
   const incomeCategories = computed(() => categories.value.filter((c) => c.kind === 'income'))
   const expenseCategories = computed(() => categories.value.filter((c) => c.kind === 'expense'))
 
   async function fetchCategories() {
-    // 静的カテゴリのため、ローカル値を即座に解決
-    categories.value = defaultCategories
+    // 静的カテゴリのロード
+    if (categories.value.length === 0) {
+      categories.value = [...defaultCategories]
+    }
+  }
+
+  async function addCategory(payload: {
+    name: string
+    kind: 'income' | 'expense'
+    icon: string
+    order: number
+  }) {
+    const newCat: Category = {
+      id: `custom-${Date.now()}`,
+      ...payload
+    }
+    categories.value.push(newCat)
+  }
+
+  async function deleteCategory(id: string) {
+    categories.value = categories.value.filter((c) => c.id !== id)
   }
 
   return {
@@ -36,5 +55,7 @@ export function useCategories(_uid?: string) {
     expenseCategories,
     loading,
     fetchCategories,
+    addCategory,
+    deleteCategory,
   }
 }
