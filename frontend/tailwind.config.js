@@ -1,76 +1,26 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: "class",
   content: [
-    "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}",
+    './index.html',
+    './src/**/*.{vue,js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
-      "colors": {
-        "surface-container-highest": "#e1e3e4",
-        "surface-tint": "#0056d2",
-        "primary-fixed-dim": "#b2c5ff",
-        "tertiary-fixed-dim": "#ffb3ac",
-        "on-tertiary": "#ffffff",
-        "on-tertiary-fixed-variant": "#930010",
-        "on-surface-variant": "#424654",
-        "secondary": "#1b6d24",
-        "error": "#ba1a1a",
-        "surface": "#f8f9fa",
-        "inverse-surface": "#2e3132",
-        "surface-container": "#edeeef",
-        "primary-fixed": "#dae2ff",
-        "on-primary": "#ffffff",
-        "background": "#f8f9fa",
-        "on-tertiary-fixed": "#410003",
-        "on-tertiary-container": "#ffcdc8",
-        "on-secondary-fixed-variant": "#005312",
-        "tertiary": "#940010",
-        "on-secondary-fixed": "#002204",
-        "tertiary-container": "#ba1b20",
-        "surface-container-high": "#e7e8e9",
-        "on-primary-fixed-variant": "#0040a1",
-        "secondary-container": "#a0f399",
-        "secondary-fixed-dim": "#88d982",
-        "on-error-container": "#93000a",
-        "outline": "#737785",
-        "primary-container": "#0056d2",
-        "on-surface": "#191c1d",
-        "on-error": "#ffffff",
-        "surface-variant": "#e1e3e4",
-        "primary": "#0040a1",
-        "on-primary-fixed": "#001847",
-        "tertiary-fixed": "#ffdad6",
-        "inverse-on-surface": "#f0f1f2",
-        "outline-variant": "#c3c6d6",
-        "on-background": "#191c1d",
-        "surface-container-low": "#f3f4f5",
-        "surface-dim": "#d9dadb",
-        "on-primary-container": "#ccd8ff",
-        "inverse-primary": "#b2c5ff",
-        "surface-bright": "#f8f9fa",
-        "on-secondary": "#ffffff",
-        "error-container": "#ffdad6",
-        "secondary-fixed": "#a3f69c",
-        "on-secondary-container": "#217128",
-        "surface-container-lowest": "#ffffff"
+      fontFamily: {
+        sans: ['Noto Sans JP', 'Inter', 'sans-serif'],
       },
-      "borderRadius": {
-        "DEFAULT": "0.25rem",
-        "lg": "0.5rem",
-        "xl": "0.75rem",
-        "full": "9999px"
+      colors: {
+        primary: {
+          DEFAULT: '#1a56db',
+          light: '#3b7af7',
+          dark: '#1240a8',
+        },
+        income: '#10b981',
+        expense: '#ef4444',
       },
-      "fontFamily": {
-        "headline": ["Manrope", "Noto Sans JP"],
-        "body": ["Public Sans", "Noto Sans JP"],
-        "label": ["Public Sans", "Noto Sans JP"]
-      }
     },
   },
   plugins: [
     require('@tailwindcss/forms'),
-    require('@tailwindcss/container-queries'),
   ],
 }

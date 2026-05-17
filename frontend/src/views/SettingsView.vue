@@ -1,81 +1,329 @@
+<template>
+  <div class="page-content">
+    <div class="settings-header">
+      <h1 class="page-title">設定</h1>
+    </div>
+
+    <!-- User info -->
+    <div class="settings-section">
+      <h2 class="section-title">アカウント</h2>
+      <div class="user-card">
+        <div class="user-avatar">
+          <span class="material-symbols-rounded">person</span>
+        </div>
+        <div class="user-info">
+          <p class="user-name">{{ user?.displayName ?? 'ユーザー' }}</p>
+          <p class="user-email">{{ user?.email }}</p>
+        </div>
+        <button class="logout-btn" @click="handleLogout">
+          <span class="material-symbols-rounded">logout</span>
+          ログアウト
+        </button>
+      </div>
+    </div>
+
+    <!-- Category management -->
+    <div class="settings-section">
+      <h2 class="section-title">カテゴリ管理</h2>
+
+      <!-- Kind toggle -->
+      <div class="toggle-group" style="margin-bottom:16px">
+        <button
+          class="toggle-btn"
+          :class="{ 'active-expense': activeKind === 'expense' }"
+          @click="activeKind = 'expense'"
+        >支出カテゴリ</button>
+        <button
+          class="toggle-btn"
+          :class="{ 'active-income': activeKind === 'income' }"
+          @click="activeKind = 'income'"
+        >収入カテゴリ</button>
+      </div>
+
+      <div v-if="loading" class="loading">読み込み中...</div>
+
+      <div v-else>
+        <div class="cat-list">
+          <div v-for="cat in filteredCategories" :key="cat.id" class="cat-item">
+            <span class="material-symbols-rounded cat-icon">{{ cat.icon }}</span>
+            <span class="cat-name">{{ cat.name }}</span>
+            <button class="delete-cat-btn" @click="handleDeleteCategory(cat.id)">
+              <span class="material-symbols-rounded">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Add category form -->
+        <div class="add-form">
+          <h3 class="add-title">カテゴリを追加</h3>
+          <div class="add-row">
+            <input
+              v-model="newName"
+              type="text"
+              class="input-field"
+              placeholder="カテゴリ名"
+            />
+            <input
+              v-model="newIcon"
+              type="text"
+              class="input-field icon-input"
+              placeholder="アイコン名"
+            />
+          </div>
+          <p class="icon-hint">
+            アイコン名は
+            <a href="https://fonts.google.com/icons" target="_blank" rel="noopener">
+              Material Symbols
+            </a>
+            で確認できます
+          </p>
+          <div v-if="newIcon" class="icon-preview">
+            <span class="material-symbols-rounded" style="font-size:28px">{{ newIcon }}</span>
+            <span>プレビュー</span>
+          </div>
+          <div v-if="addError" class="error-msg">
+            <span class="material-symbols-rounded">error</span>{{ addError }}
+          </div>
+          <button class="btn-primary" :disabled="!newName.trim()" @click="handleAddCategory">
+            追加する
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <BottomNav />
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { sessionStore } from '@/stores/session'
 import { useAuth } from '@/composables/useAuth'
-import { useHousehold } from '@/composables/useHousehold'
+import { useCategories } from '@/composables/useCategories'
+import BottomNav from '@/components/BottomNav.vue'
+import type { TransactionKind } from '@/types'
 
-const { signOut } = useAuth()
-const { currentHousehold } = useHousehold()
 const router = useRouter()
-const signingOut = ref(false)
+const { user, logout } = useAuth()
+const uid = user.value!.uid
+const { categories, loading, fetchCategories, addCategory, deleteCategory } = useCategories(uid)
 
-async function handleSignOut() {
-  signingOut.value = true
+const activeKind = ref<TransactionKind>('expense')
+const newName = ref('')
+const newIcon = ref('category')
+const addError = ref<string | null>(null)
+
+onMounted(() => fetchCategories())
+
+const filteredCategories = computed(() =>
+  categories.value.filter((c) => c.kind === activeKind.value),
+)
+
+const handleAddCategory = async () => {
+  if (!newName.value.trim()) return
+  addError.value = null
   try {
-    await signOut()
-    await router.push('/login')
-  } finally {
-    signingOut.value = false
+    await addCategory({
+      name: newName.value.trim(),
+      kind: activeKind.value,
+      icon: newIcon.value.trim() || 'category',
+      order: categories.value.length,
+    })
+    newName.value = ''
+    newIcon.value = 'category'
+  } catch (e: any) {
+    addError.value = e.message
   }
 }
 
-const menuItems = [
-  { icon: 'person', label: 'プロフィール設定', to: '/settings' },
-  { icon: 'house', label: '家計グループ設定', to: '/settings' },
-  { icon: 'category', label: 'カテゴリ管理', to: '/categories' },
-  { icon: 'account_balance', label: '口座・カード管理', to: '/accounts' },
-  { icon: 'mail', label: 'Gmail取込設定', to: '/gmail-import' },
-]
+const handleDeleteCategory = async (id: string) => {
+  await deleteCategory(id)
+}
+
+const handleLogout = async () => {
+  await logout()
+  router.push('/login')
+}
 </script>
 
-<template>
-  <div class="space-y-6 pb-28">
-    <section>
-      <p class="font-label text-[11px] text-on-surface-variant font-semibold uppercase tracking-widest">アカウント</p>
-      <h1 class="text-3xl font-extrabold tracking-tight text-on-surface font-headline mt-1">設定</h1>
-    </section>
+<style scoped>
+.settings-header {
+  background: var(--color-surface);
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
 
-    <!-- Profile card -->
-    <div class="bg-surface-container-lowest rounded-[2rem] p-6 border border-outline-variant/10 shadow-sm flex items-center gap-4">
-      <div class="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-on-primary text-2xl font-extrabold">
-        {{ (sessionStore.user?.name || sessionStore.user?.email || 'U')[0].toUpperCase() }}
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="font-bold text-on-surface text-lg truncate">{{ sessionStore.user?.name || 'ユーザー' }}</p>
-        <p class="text-sm text-on-surface-variant truncate">{{ sessionStore.user?.email }}</p>
-        <p v-if="currentHousehold" class="text-xs text-on-surface-variant mt-1">
-          🏠 {{ currentHousehold.name }}
-        </p>
-      </div>
-    </div>
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+}
 
-    <!-- Menu list -->
-    <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 shadow-sm overflow-hidden divide-y divide-outline-variant/10">
-      <router-link
-        v-for="item in menuItems"
-        :key="item.label"
-        :to="item.to"
-        class="flex items-center gap-4 px-5 py-4 hover:bg-surface-container transition-colors"
-      >
-        <div class="w-10 h-10 bg-primary-fixed rounded-xl flex items-center justify-center">
-          <span class="material-symbols-outlined text-on-primary-fixed-variant text-[20px]" style="font-variation-settings: 'FILL' 1;">{{ item.icon }}</span>
-        </div>
-        <span class="font-medium text-on-surface flex-1">{{ item.label }}</span>
-        <span class="material-symbols-outlined text-on-surface-variant text-[20px]">chevron_right</span>
-      </router-link>
-    </div>
+.settings-section {
+  padding: 20px 16px;
+  border-bottom: 8px solid var(--color-bg);
+}
 
-    <!-- Logout button -->
-    <button
-      @click="handleSignOut"
-      :disabled="signingOut"
-      class="w-full flex items-center justify-center gap-3 py-4 bg-error/10 text-error font-bold rounded-2xl border border-error/20 active:scale-95 transition-transform duration-200 disabled:opacity-50"
-    >
-      <span class="material-symbols-outlined">logout</span>
-      {{ signingOut ? 'ログアウト中...' : 'ログアウト' }}
-    </button>
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 16px;
+}
 
-    <p class="text-center text-xs text-on-surface-variant">Finance App v0.1.0</p>
-  </div>
-</template>
+.user-card {
+  background: var(--color-bg);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.user-email {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-expense);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.logout-btn:hover { background: rgba(239, 68, 68, 0.08); }
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.cat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--color-bg);
+  border-radius: 12px;
+}
+
+.cat-icon {
+  color: var(--color-primary);
+  font-size: 22px;
+}
+
+.cat-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.delete-cat-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.delete-cat-btn:hover { color: var(--color-expense); }
+
+.add-form {
+  background: var(--color-bg);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.add-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.add-row {
+  display: flex;
+  gap: 10px;
+}
+
+.icon-input {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.icon-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.icon-hint a {
+  color: var(--color-primary);
+}
+
+.icon-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-primary);
+  font-size: 13px;
+}
+
+.error-msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff1f1;
+  color: var(--color-expense);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+</style>

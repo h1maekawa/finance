@@ -1,224 +1,343 @@
-<script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { sessionStore } from '@/stores/session'
-import { useHousehold } from '@/composables/useHousehold'
-import { useTransactions } from '@/composables/useTransactions'
-import { useAccounts } from '@/composables/useAccounts'
-import { useEmailImport } from '@/composables/useEmailImport'
-
-const router = useRouter()
-const { currentHouseholdId, currentHousehold, fetchHouseholds } = useHousehold()
-const { transactions, totalIncome, totalExpense, balance, loading: txLoading, fetchTransactions } = useTransactions(() => currentHouseholdId.value)
-const { accounts, totalBalance, fetchAccounts } = useAccounts(() => currentHouseholdId.value)
-const { importLogs, fetchImportLogs, importing } = useEmailImport(() => currentHouseholdId.value)
-
-onMounted(async () => {
-  await fetchHouseholds()
-  await fetchTransactions()
-  await fetchAccounts()
-  await fetchImportLogs().catch(() => {})
-})
-
-const lastSync = computed(() => {
-  if (importLogs.value.length === 0) return null
-  return new Date(importLogs.value[0].imported_at).toLocaleString('ja-JP', {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-  })
-})
-
-const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 12) return 'おはようございます'
-  if (h < 18) return 'こんにちは'
-  return 'こんばんは'
-})
-
-const userName = computed(() => {
-  const u = sessionStore.user
-  return u?.name?.split(' ')[0] || u?.email?.split('@')[0] || 'あなた'
-})
-
-const recentTransactions = computed(() => transactions.value.slice(0, 5))
-
-const now = new Date()
-const monthLabel = computed(() => `${now.getFullYear()}年${now.getMonth() + 1}月`)
-
-const budgetUsagePercent = computed(() => {
-  if (totalExpense.value === 0) return 0
-  // rough: assume monthly income is budget ceiling
-  if (totalIncome.value === 0) return 0
-  return Math.min(100, Math.round((totalExpense.value / totalIncome.value) * 100))
-})
-const ringOffset = computed(() => {
-  const circumference = 2 * Math.PI * 52
-  return circumference - (budgetUsagePercent.value / 100) * circumference
-})
-const ringCircumference = 2 * Math.PI * 52
-
-function formatAmount(n: number) {
-  return `¥${Math.abs(n).toLocaleString()}`
-}
-
-const categoryIconMap: Record<string, string> = {
-  '食費': 'restaurant',
-  '日用品': 'local_grocery_store',
-  '交通費': 'directions_bus',
-  '家賃': 'home',
-  '光熱費': 'bolt',
-  '娯楽': 'movie',
-  '医療': 'local_hospital',
-  '衣類': 'checkroom',
-  '給料': 'payments',
-  '副収入': 'account_balance_wallet',
-}
-
-function getIcon(tx: any) {
-  const note = tx.note || ''
-  for (const [k, v] of Object.entries(categoryIconMap)) {
-    if (note.includes(k)) return v
-  }
-  if (note.includes('スーパー') || note.includes('ライフ') || note.includes('セブン')) return 'restaurant'
-  return 'receipt_long'
-}
-</script>
-
 <template>
-  <div class="space-y-6 pb-28">
-    <!-- Welcome -->
-    <section class="flex justify-between items-end">
-      <div>
-        <p class="font-label text-[11px] text-on-surface-variant font-semibold uppercase tracking-widest">{{ greeting }}、{{ userName }}さん</p>
-        <h1 class="text-3xl font-extrabold tracking-tight text-on-surface font-headline mt-1">{{ currentHousehold?.name || '家計の概況' }}</h1>
-      </div>
-      <div v-if="lastSync" class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low rounded-full text-[10px] font-bold text-on-surface-variant border border-outline-variant/10 shadow-sm">
-        <span :class="['w-1.5 h-1.5 rounded-full', importing ? 'bg-primary animate-pulse' : 'bg-secondary']"></span>
-        {{ lastSync }}
-      </div>
-    </section>
-
-    <!-- Summary Card -->
-    <div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-outline-variant/10 space-y-5">
-      <div class="flex justify-between items-start">
+  <div class="page-content">
+    <!-- Header -->
+    <div class="home-header">
+      <div class="header-top">
         <div>
-          <p class="font-label text-[11px] text-on-surface-variant font-medium">{{ monthLabel }}の収支</p>
-          <p :class="['text-4xl font-extrabold tracking-tighter leading-none mt-1', balance >= 0 ? 'text-secondary' : 'text-tertiary']">
-            {{ balance >= 0 ? '+' : '-' }}{{ formatAmount(balance) }}
-          </p>
+          <p class="greeting">こんにちは！</p>
+          <h2 class="month-label">{{ currentMonthLabel }}</h2>
         </div>
-        <div class="text-right">
-          <p class="font-label text-[11px] text-on-surface-variant font-medium">総資産</p>
-          <p class="text-xl font-bold text-primary mt-1">{{ formatAmount(totalBalance) }}</p>
-        </div>
+        <button class="logout-btn" @click="handleLogout">
+          <span class="material-symbols-rounded">logout</span>
+        </button>
       </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-surface-container-low p-4 rounded-2xl space-y-1">
-          <div class="flex items-center gap-1 text-secondary">
-            <span class="material-symbols-outlined text-[16px]">arrow_downward</span>
-            <span class="text-[11px] font-bold uppercase tracking-wider font-label">収入</span>
-          </div>
-          <p class="text-lg font-bold text-on-surface">{{ formatAmount(totalIncome) }}</p>
-        </div>
-        <div class="bg-surface-container-low p-4 rounded-2xl space-y-1">
-          <div class="flex items-center gap-1 text-tertiary">
-            <span class="material-symbols-outlined text-[16px]">arrow_upward</span>
-            <span class="text-[11px] font-bold uppercase tracking-wider font-label">支出</span>
-          </div>
-          <p class="text-lg font-bold text-on-surface">{{ formatAmount(totalExpense) }}</p>
-        </div>
+      <div class="month-nav">
+        <button class="month-btn" @click="changeMonth(-1)">
+          <span class="material-symbols-rounded">chevron_left</span>
+        </button>
+        <span class="month-text">{{ currentMonthLabel }}</span>
+        <button class="month-btn" @click="changeMonth(1)">
+          <span class="material-symbols-rounded">chevron_right</span>
+        </button>
       </div>
     </div>
 
-    <!-- Budget Ring & Sync Info -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-outline-variant/10 flex items-center gap-6">
-        <div class="relative w-24 h-24 flex-shrink-0">
-          <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-            <circle class="text-surface-container-high" stroke-width="10" stroke="currentColor" fill="transparent" r="52" cx="60" cy="60" />
-            <circle
-              class="text-primary transition-all duration-1000 ease-out"
-              stroke-width="10"
-              :stroke-dasharray="ringCircumference"
-              :stroke-dashoffset="ringOffset"
-              stroke-linecap="round"
-              stroke="currentColor"
-              fill="transparent"
-              r="52"
-              cx="60"
-              cy="60"
-            />
-          </svg>
-          <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <span class="text-xl font-extrabold text-on-surface">{{ budgetUsagePercent }}%</span>
-          </div>
-        </div>
-        <div class="min-w-0">
-          <h3 class="font-bold text-sm font-headline truncate">予算使用率</h3>
-          <p class="text-[12px] text-on-surface-variant font-body mt-1 leading-tight">
-            今月は収入の {{ budgetUsagePercent }}% を支出中。
-          </p>
-        </div>
-      </div>
-
-      <div class="bg-surface-container-lowest rounded-[2rem] p-6 shadow-sm border border-outline-variant/10 flex items-center gap-4 relative overflow-hidden group">
-        <div class="absolute -right-4 -bottom-4 w-20 h-20 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors"></div>
-        <div class="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center flex-shrink-0 relative z-10">
-          <span class="material-symbols-outlined text-primary text-2xl">auto_awesome</span>
-        </div>
-        <div class="min-w-0 relative z-10">
-          <h3 class="font-bold text-sm font-headline">Gmail自動同期</h3>
-          <p class="text-[11px] text-on-surface-variant mt-0.5 truncate">
-            {{ lastSync ? `${lastSync} 更新` : '同期設定なし' }}
-          </p>
-          <button @click="fetchImportLogs" class="text-[11px] font-bold text-primary mt-1 hover:underline">
-            状態を更新
-          </button>
-        </div>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="loading">
+      <div class="spinner"></div>
     </div>
 
-    <!-- Recent Transactions -->
-    <section class="space-y-4">
-      <div class="flex justify-between items-end">
-        <h2 class="text-xl font-bold tracking-tight font-headline">最近の取引</h2>
-        <router-link to="/cashflow" class="text-primary font-bold text-sm">すべて見る</router-link>
-      </div>
-
-      <div v-if="txLoading" class="text-center py-8 text-on-surface-variant text-sm">読み込み中…</div>
-      <div v-else-if="recentTransactions.length === 0" class="text-center py-8 text-on-surface-variant text-sm bg-surface-container-lowest rounded-2xl">
-        今月の取引はまだありません
-      </div>
-      <div v-else class="space-y-3">
-        <div
-          v-for="tx in recentTransactions"
-          :key="tx.id"
-          class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/5 active:scale-[0.98] transition-transform duration-200"
-        >
-          <div class="flex items-center gap-3">
-            <div :class="['w-11 h-11 flex items-center justify-center rounded-2xl', tx.kind === 'income' ? 'bg-secondary-container' : 'bg-primary-fixed']">
-              <span class="material-symbols-outlined text-[20px]" :class="tx.kind === 'income' ? 'text-on-secondary-container' : 'text-on-primary-fixed-variant'" style="font-variation-settings: 'FILL' 1;">
-                {{ getIcon(tx) }}
-              </span>
-            </div>
-            <div>
-              <div class="flex items-center gap-1.5">
-                <p class="font-bold text-on-surface text-sm truncate max-w-[150px]">{{ tx.note || '取引' }}</p>
-                <span v-if="tx.import_source === 'gmail'" class="material-symbols-outlined text-[12px] text-primary" title="Gmailから自動取込">auto_awesome</span>
-              </div>
-              <p class="text-xs text-on-surface-variant">{{ tx.transaction_date }}</p>
-            </div>
+    <template v-else>
+      <!-- Summary Cards -->
+      <div class="summary-grid">
+        <div class="summary-card income">
+          <span class="material-symbols-rounded card-icon">trending_up</span>
+          <div>
+            <p class="card-label">収入</p>
+            <p class="card-amount">{{ formatAmount(summary.income) }}</p>
           </div>
-          <p :class="['font-bold text-sm', tx.kind === 'income' ? 'text-secondary' : 'text-tertiary']">
-            {{ tx.kind === 'income' ? '+' : '-' }}{{ formatAmount(tx.amount) }}
-          </p>
+        </div>
+        <div class="summary-card expense">
+          <span class="material-symbols-rounded card-icon">trending_down</span>
+          <div>
+            <p class="card-label">支出</p>
+            <p class="card-amount">{{ formatAmount(summary.expense) }}</p>
+          </div>
+        </div>
+        <div class="summary-card balance" :class="summary.balance >= 0 ? 'positive' : 'negative'">
+          <span class="material-symbols-rounded card-icon">account_balance</span>
+          <div>
+            <p class="card-label">残高</p>
+            <p class="card-amount">{{ formatAmount(summary.balance) }}</p>
+          </div>
         </div>
       </div>
-    </section>
 
-    <!-- FAB -->
-    <router-link to="/entry" class="fixed bottom-28 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center z-40 active:scale-95 transition-transform duration-200">
-      <span class="material-symbols-outlined text-2xl">add</span>
-    </router-link>
+      <!-- Chart -->
+      <div v-if="Object.keys(categoryExpenses).length > 0" class="section">
+        <h3 class="section-title">カテゴリ別支出</h3>
+        <div class="chart-container">
+          <Doughnut :data="chartData" :options="chartOptions" />
+        </div>
+      </div>
+
+      <!-- Recent transactions -->
+      <div class="section">
+        <h3 class="section-title">最近の取引</h3>
+        <div v-if="recentTransactions.length === 0" class="empty-state">
+          <span class="material-symbols-rounded">receipt_long</span>
+          <p>取引がありません</p>
+        </div>
+        <div v-else class="tx-list">
+          <TransactionCard
+            v-for="tx in recentTransactions"
+            :key="tx.id"
+            :transaction="tx"
+            :icon="getCategoryIcon(tx.category)"
+          />
+        </div>
+      </div>
+    </template>
+
+    <BottomNav />
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Doughnut } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js'
+import { useAuth } from '@/composables/useAuth'
+import { useTransactions } from '@/composables/useTransactions'
+import { useCategories } from '@/composables/useCategories'
+import BottomNav from '@/components/BottomNav.vue'
+import TransactionCard from '@/components/TransactionCard.vue'
+
+ChartJS.register(ArcElement, Tooltip, Legend)
+
+const router = useRouter()
+const { user, logout } = useAuth()
+const uid = user.value!.uid
+
+const now = new Date()
+const currentYear = ref(now.getFullYear())
+const currentMonth = ref(now.getMonth() + 1)
+
+const { transactions, loading, summary, recentTransactions, categoryExpenses, fetchByMonth } =
+  useTransactions(uid)
+const { categories, fetchCategories } = useCategories(uid)
+
+onMounted(async () => {
+  await fetchCategories()
+  await fetchByMonth(currentYear.value, currentMonth.value)
+})
+
+watch([currentYear, currentMonth], ([y, m]) => {
+  fetchByMonth(y, m)
+})
+
+const currentMonthLabel = computed(
+  () => `${currentYear.value}年${currentMonth.value}月`,
+)
+
+const changeMonth = (delta: number) => {
+  let m = currentMonth.value + delta
+  let y = currentYear.value
+  if (m > 12) { m = 1; y++ }
+  if (m < 1) { m = 12; y-- }
+  currentMonth.value = m
+  currentYear.value = y
+}
+
+const formatAmount = (n: number) =>
+  (n < 0 ? '-' : '') + new Intl.NumberFormat('ja-JP').format(Math.abs(n)) + '円'
+
+const getCategoryIcon = (name: string) => {
+  const cat = categories.value.find((c) => c.name === name)
+  return cat?.icon ?? 'category'
+}
+
+const CHART_COLORS = [
+  '#1a56db', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+]
+
+const chartData = computed(() => {
+  const labels = Object.keys(categoryExpenses.value)
+  const data = Object.values(categoryExpenses.value)
+  return {
+    labels,
+    datasets: [{
+      data,
+      backgroundColor: CHART_COLORS.slice(0, labels.length),
+      borderWidth: 0,
+    }],
+  }
+})
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: { position: 'bottom' as const, labels: { font: { family: 'Noto Sans JP', size: 12 } } },
+  },
+}
+
+const handleLogout = async () => {
+  await logout()
+  router.push('/login')
+}
+</script>
+
+<style scoped>
+.home-header {
+  background: linear-gradient(135deg, #1a56db 0%, #0e3fa8 100%);
+  color: white;
+  padding: 20px 20px 28px;
+}
+
+.header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.greeting {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.month-label {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.logout-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.month-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  transition: background 0.2s;
+}
+.month-btn:hover { background: rgba(255,255,255,0.25); }
+
+.month-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 60px;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.summary-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.summary-card.income .card-icon { color: var(--color-income); background: rgba(16, 185, 129, 0.1); }
+.summary-card.expense .card-icon { color: var(--color-expense); background: rgba(239, 68, 68, 0.1); }
+.summary-card.positive .card-icon { color: var(--color-income); background: rgba(16, 185, 129, 0.1); }
+.summary-card.negative .card-icon { color: var(--color-expense); background: rgba(239, 68, 68, 0.1); }
+
+.card-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.card-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.summary-card.income .card-amount { color: var(--color-income); }
+.summary-card.expense .card-amount { color: var(--color-expense); }
+
+.section {
+  padding: 0 16px 16px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 12px;
+}
+
+.chart-container {
+  max-width: 260px;
+  margin: 0 auto;
+}
+
+.tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-muted);
+}
+
+.empty-state .material-symbols-rounded {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+</style>

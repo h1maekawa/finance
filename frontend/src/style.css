@@ -1,57 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  .material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-  }
+:root {
+  --color-primary: #1a56db;
+  --color-primary-light: #3b7af7;
+  --color-primary-dark: #1240a8;
+  --color-income: #10b981;
+  --color-expense: #ef4444;
+  --color-surface: #ffffff;
+  --color-bg: #f8fafc;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --color-border: #e2e8f0;
+  --bottom-nav-height: 64px;
 }
 
-@layer components {
-  .mobile-shell {
-    @apply min-h-screen bg-surface-container-lowest relative;
-  }
-  
-  .mobile-main {
-    @apply w-full max-w-[640px] mx-auto px-6 pt-24 pb-32 min-h-screen relative bg-background;
-    box-shadow: 0 0 100px rgba(0,0,0,0.02);
-  }
-
-  .card-premium {
-    @apply bg-surface-container-lowest rounded-[2.5rem] p-6 shadow-sm border border-outline-variant/10 transition-all duration-300;
-  }
-  
-  .card-premium-interactive {
-    @apply card-premium active:scale-[0.98] cursor-pointer hover:shadow-md;
-  }
-
-  .text-premium-headline {
-    @apply font-headline font-extrabold tracking-tight text-on-surface;
-  }
-
-  .text-premium-label {
-    @apply font-label text-[11px] font-bold uppercase tracking-[0.15em] text-on-surface-variant;
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-/* Base resets */
-body {
-  @apply bg-surface-container-lowest;
+html, body, #app {
+  height: 100%;
+  font-family: 'Noto Sans JP', 'Inter', sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbar for a cleaner look */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.material-symbols-rounded {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+.app-container {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  background-color: var(--color-surface);
+  box-shadow: 0 0 40px rgba(0,0,0,0.08);
 }
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.05);
+
+.page-content {
+  padding-bottom: calc(var(--bottom-nav-height) + 16px);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+
+/* Card */
+.card {
+  background: var(--color-surface);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+/* Button */
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  width: 100%;
+}
+.btn-primary:hover { background-color: var(--color-primary-light); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Input */
+.input-field {
+  width: 100%;
+  border: 1.5px solid var(--color-border);
   border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.1);
+.input-field:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.12);
+}
+
+/* Toggle */
+.toggle-group {
+  display: flex;
+  background: var(--color-bg);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+.toggle-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.toggle-btn.active-expense {
+  background: var(--color-expense);
+  color: white;
+}
+.toggle-btn.active-income {
+  background: var(--color-income);
+  color: white;
+}
+
+/* Numpad */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.numpad-btn {
+  background: var(--color-bg);
+  border: none;
+  border-radius: 12px;
+  padding: 18px;
+  font-size: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  color: var(--color-text);
+}
+.numpad-btn:hover { background: var(--color-border); }
+.numpad-btn:active { transform: scale(0.94); }
+.numpad-btn.delete { color: var(--color-expense); }
+
+/* FAB */
+.fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(26, 86, 219, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(26, 86, 219, 0.5);
 }

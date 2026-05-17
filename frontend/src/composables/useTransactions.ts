@@ -1,100 +1,133 @@
-import { computed, ref, watch } from 'vue'
-import { supabase } from '@/lib/supabase'
-import type { Transaction, TransactionKind } from '@/types/db'
+import { ref, computed, onUnmounted } from 'vue'
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  serverTimestamp,
+  type Unsubscribe,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import type { Transaction, TransactionInput, MonthlySummary } from '@/types'
 
-export function useTransactions(householdId: () => string | null) {
+export function useTransactions(userId: string) {
   const transactions = ref<Transaction[]>([])
   const loading = ref(false)
-  const selectedMonth = ref(new Date())
+  const error = ref<string | null>(null)
 
-  const monthRange = computed(() => {
-    const d = selectedMonth.value
-    const start = new Date(d.getFullYear(), d.getMonth(), 1)
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 1)
-    return {
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10),
+  let unsubscribeListener: Unsubscribe | null = null
+
+  const fetchByMonth = async (year: number, month: number) => {
+    loading.value = true
+    error.value = null
+
+    if (unsubscribeListener) {
+      unsubscribeListener()
+      unsubscribeListener = null
+    }
+
+    try {
+      const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+      const endDate = `${year}-${String(month).padStart(2, '0')}-31`
+      const q = query(
+        collection(db, `users/${userId}/transactions`),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate),
+        orderBy('date', 'desc'),
+      )
+
+      unsubscribeListener = onSnapshot(
+        q,
+        (snap) => {
+          transactions.value = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Transaction))
+          loading.value = false
+        },
+        (err) => {
+          console.error(err)
+          error.value = 'リアルタイムデータの取得に失敗しました'
+          loading.value = false
+        }
+      )
+    } catch (e: any) {
+      error.value = e.message ?? '取引の取得に失敗しました'
+      loading.value = false
+    }
+  }
+
+  onUnmounted(() => {
+    if (unsubscribeListener) {
+      unsubscribeListener()
     }
   })
 
-  const totalIncome = computed(() =>
-    transactions.value
-      .filter((t) => t.kind === 'income')
-      .reduce((sum, t) => sum + Number(t.amount), 0),
-  )
-
-  const totalExpense = computed(() =>
-    transactions.value
-      .filter((t) => t.kind === 'expense')
-      .reduce((sum, t) => sum + Number(t.amount), 0),
-  )
-
-  const balance = computed(() => totalIncome.value - totalExpense.value)
-
-  async function fetchTransactions() {
-    const hid = householdId()
-    if (!hid) return
-
+  const addTransaction = async (input: TransactionInput) => {
     loading.value = true
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('id, household_id, user_id, category_id, credit_card_id, kind, amount, transaction_date, note')
-      .eq('household_id', hid)
-      .gte('transaction_date', monthRange.value.start)
-      .lt('transaction_date', monthRange.value.end)
-      .order('transaction_date', { ascending: false })
-
-    loading.value = false
-    if (error) throw error
-    transactions.value = (data ?? []) as Transaction[]
+    error.value = null
+    try {
+      await addDoc(collection(db, `users/${userId}/transactions`), {
+        ...input,
+        createdAt: serverTimestamp(),
+      })
+    } catch (e: any) {
+      error.value = e.message ?? '保存に失敗しました'
+      throw e
+    } finally {
+      loading.value = false
+    }
   }
 
-  async function createTransaction(payload: {
-    category_id: string
-    kind: TransactionKind
-    amount: number
-    transaction_date: string
-    note?: string | null
-    credit_card_id?: string | null
-    user_id: string
-  }) {
-    const hid = householdId()
-    if (!hid) throw new Error('No household selected')
-
-    const { error } = await supabase.from('transactions').insert({
-      household_id: hid,
-      ...payload,
-    })
-
-    if (error) throw error
-    await fetchTransactions()
+  const deleteTransaction = async (transactionId: string) => {
+    error.value = null
+    try {
+      await deleteDoc(doc(db, `users/${userId}/transactions/${transactionId}`))
+    } catch (e: any) {
+      error.value = e.message ?? '削除に失敗しました'
+    }
   }
 
-  async function updateTransaction(id: string, patch: Partial<Transaction>) {
-    const { error } = await supabase.from('transactions').update(patch).eq('id', id)
-    if (error) throw error
-    await fetchTransactions()
-  }
+  const summary = computed<MonthlySummary>(() => {
+    const income = transactions.value
+      .filter((t) => t.kind === 'income')
+      .reduce((sum, t) => sum + t.amount, 0)
+    const expense = transactions.value
+      .filter((t) => t.kind === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0)
+    return { income, expense, balance: income - expense }
+  })
 
-  async function deleteTransaction(id: string) {
-    const { error } = await supabase.from('transactions').delete().eq('id', id)
-    if (error) throw error
-    transactions.value = transactions.value.filter((t) => t.id !== id)
-  }
+  const recentTransactions = computed(() => transactions.value.slice(0, 5))
 
-  watch([() => householdId(), selectedMonth], fetchTransactions, { immediate: true })
+  const groupedByDate = computed(() => {
+    const groups: Record<string, Transaction[]> = {}
+    for (const t of transactions.value) {
+      if (!groups[t.date]) groups[t.date] = []
+      groups[t.date].push(t)
+    }
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a))
+  })
+
+  const categoryExpenses = computed(() => {
+    const map: Record<string, number> = {}
+    for (const t of transactions.value.filter((t) => t.kind === 'expense')) {
+      map[t.category] = (map[t.category] ?? 0) + t.amount
+    }
+    return map
+  })
 
   return {
     transactions,
     loading,
-    selectedMonth,
-    monthRange,
-    totalIncome,
-    totalExpense,
-    balance,
-    fetchTransactions,
-    createTransaction,
-    updateTransaction,
+    error,
+    fetchByMonth,
+    addTransaction,
     deleteTransaction,
+    summary,
+    recentTransactions,
+    groupedByDate,
+    categoryExpenses,
   }
 }

@@ -1,121 +1,73 @@
-import { onMounted, ref } from 'vue'
-import { firebaseAuth } from '@/lib/firebase'
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut } from 'firebase/auth'
-import { supabase } from '@/lib/supabase'
-import { sessionStore, syncGmail } from '@/stores/session'
-import type { AuthUser } from '@/stores/session'
+import { ref, onUnmounted } from 'vue'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  type User,
+} from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
-let subscribed = false
+const user = ref<User | null>(null)
+const loading = ref(true)
+const error = ref<string | null>(null)
 
-function mapFirebaseUserToAuthUser(user: any): AuthUser {
-  return {
-    id: user.uid,
-    email: user.email ?? null,
-    name: user.displayName ?? null,
-  }
-}
+// Initialize auth state listener (singleton)
+const unsubscribe = onAuthStateChanged(auth, (u) => {
+  user.value = u
+  loading.value = false
+})
 
 export function useAuth() {
-  const loading = ref(false)
-
-  function initAuth(): Promise<void> {
-    if (subscribed) {
-      return Promise.resolve()
-    }
-    subscribed = true
-
-    // Global unauthorized listener (from supabase.ts)
-    if (typeof window !== 'undefined') {
-      window.addEventListener('auth:unauthorized', () => {
-        console.log('Unauthorized event received, signing out...')
-        signOut()
-      })
-    }
-
-    return new Promise((resolve) => {
-      // onIdTokenChanged is more robust than onAuthStateChanged for session persistence
-      firebaseAuth.onIdTokenChanged(async (user: import('firebase/auth').User | null) => {
-        if (user) {
-          sessionStore.user = mapFirebaseUserToAuthUser(user)
-        } else {
-          sessionStore.user = null
-        }
-        sessionStore.initialized = true
-        resolve()
-      })
-    })
-  }
-
-  async function saveGmailToken(userId: string, accessToken: string) {
-    try {
-      await supabase.from('gmail_tokens').upsert({
-        user_id: userId,
-        access_token: accessToken,
-        refresh_token: null, // Depending on offline access, refresh token might not be available from popup
-        token_type: 'google',
-        scopes: 'https://www.googleapis.com/auth/gmail.readonly',
-        expires_at: new Date(Date.now() + 3500 * 1000).toISOString(),
-      }, { onConflict: 'user_id' })
-    } catch (dbError) {
-      console.error('Failed to save gmail token from session:', dbError)
-    }
-  }
-
-  async function signInWithGoogle() {
-    console.log('signInWithGoogle started...')
+  const loginWithEmail = async (email: string, password: string) => {
+    error.value = null
     loading.value = true
     try {
-      const provider = new GoogleAuthProvider()
-      provider.addScope('https://www.googleapis.com/auth/gmail.readonly')
-      provider.setCustomParameters({
-        prompt: 'consent',
-        access_type: 'offline'
-      })
-
-      console.log('Opening Firebase signInWithPopup...')
-      const result = await signInWithPopup(firebaseAuth, provider)
-      console.log('SignIn result received:', result.user.email)
-      
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      
-      if (credential?.accessToken) {
-        console.log('Saving Gmail token...')
-        await saveGmailToken(result.user.uid, credential.accessToken)
-      }
-
-      // Trigger Gmail sync in background after login
-      console.log('Starting background Gmail sync...')
-      syncGmail().catch((e) => console.error('Background sync failed:', e))
-    } catch (authError: any) {
-      console.error('Failed to sign in with Google:', authError)
-      throw authError // Re-throw to show in UI
+      await signInWithEmailAndPassword(auth, email, password)
+    } catch (e: any) {
+      error.value = e.message ?? 'ログインに失敗しました'
+      throw e
     } finally {
       loading.value = false
     }
   }
 
-  async function signOut() {
+  const registerWithEmail = async (email: string, password: string) => {
+    error.value = null
+    loading.value = true
     try {
-      await firebaseSignOut(firebaseAuth)
-      await supabase.auth.signOut() // Just in case to clear any internal supabase session
-    } catch (error) {
-      console.error('Sign out error:', error)
+      await createUserWithEmailAndPassword(auth, email, password)
+    } catch (e: any) {
+      error.value = e.message ?? '登録に失敗しました'
+      throw e
     } finally {
-      sessionStore.user = null
+      loading.value = false
     }
   }
 
-  onMounted(() => {
-    if (!sessionStore.initialized) {
-      initAuth()
+  const loginWithGoogle = async () => {
+    error.value = null
+    loading.value = true
+    try {
+      const provider = new GoogleAuthProvider()
+      await signInWithPopup(auth, provider)
+    } catch (e: any) {
+      error.value = e.message ?? 'Googleログインに失敗しました'
+      throw e
+    } finally {
+      loading.value = false
     }
-  })
-
-  return {
-    loading,
-    sessionStore,
-    signInWithGoogle,
-    signOut,
-    initAuth,
   }
+
+  const logout = async () => {
+    await signOut(auth)
+  }
+
+  const clearError = () => {
+    error.value = null
+  }
+
+  return { user, loading, error, loginWithEmail, registerWithEmail, loginWithGoogle, logout, clearError }
 }
