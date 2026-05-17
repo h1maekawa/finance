@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import LandingView from '@/views/LandingView.vue'
 import LoginView from '@/views/LoginView.vue'
 import HomeView from '@/views/HomeView.vue'
 import HistoryView from '@/views/HistoryView.vue'
@@ -9,13 +10,13 @@ import SettingsView from '@/views/SettingsView.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/home' },
+    { path: '/', name: 'landing', component: LandingView, meta: { public: true } },
     { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/home', name: 'home', component: HomeView, meta: { requiresAuth: true } },
     { path: '/history', name: 'history', component: HistoryView, meta: { requiresAuth: true } },
     { path: '/entry', name: 'entry', component: EntryView, meta: { requiresAuth: true } },
     { path: '/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true } },
-    { path: '/:pathMatch(.*)*', redirect: '/home' },
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
