@@ -1,154 +1,122 @@
-# Finance App（Vue 3 + Firebase + Supabase）
+# Finance App (Vue 3 + Firebase Auth/Firestore + GAS)
 
-家計簿アプリ。Firebase で認証（Google ログイン）、Supabase でデータ管理。
+自動連携機能付きの、モバイルファーストなシンプル家計簿Webアプリケーション。
+三井住友カード・楽天カード・PayPayの決済通知メールから自動で家計簿データを抽出し、リアルタイムにFirestoreに反映します。
 
-## フォルダ構成
+## 🌟 特徴
 
-```
-finance/
-├── backend/
-│   └── supabase/
-│       └── schema.sql       # DB スキーマ（テーブル / RLS / 関数 すべて）
-└── frontend/
-    ├── src/
-    │   ├── composables/     # useAuth / useHousehold / useTransactions など
-    │   ├── components/      # AppHeader / BottomNavigation / グラフ
-    │   ├── views/           # 各画面
-    │   ├── lib/             # firebase.ts / supabase.ts
-    │   ├── stores/          # session.ts（ユーザー状態）
-    │   ├── services/        # categoryService.ts
-    │   └── types/           # db.ts（型定義）
-    ├── .env                 # 環境変数（Git 管理外）
-    └── .env.example         # 環境変数テンプレート
-```
-
-## セットアップ
-
-### 1. Firebase（認証）
-
-1. [Firebase Console](https://console.firebase.google.com/) でプロジェクト作成
-2. **Authentication → Sign-in method** で「Google」を有効化
-3. プロジェクト設定 → ウェブアプリを追加して設定値を取得
-
-### 2. Supabase（データ）
-
-1. [Supabase](https://supabase.com/) でプロジェクト作成
-2. **SQL Editor** で `backend/supabase/schema.sql` をそのまま実行
-3. **Authentication → Third-party auth** で Firebase を追加（Project ID を入力）
-   - 参照: [Firebase Auth 連携](https://supabase.com/docs/guides/auth/third-party/firebase-auth)
-
-### 3. Frontend
-
-```bash
-cd frontend
-cp .env.example .env
-# .env に VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を記入
-npm install
-npm run dev
-```
-
-### 環境変数一覧
-
-| 変数名 | 説明 | 取得元 |
-|--------|------|--------|
-| `VITE_SUPABASE_URL` | Supabase プロジェクト URL | Supabase → Settings → API |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key | Supabase → Settings → API |
-| `VITE_FIREBASE_API_KEY` | Firebase API キー | Firebase Console → プロジェクト設定 |
-| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase 認証ドメイン | 同上 |
-| `VITE_FIREBASE_PROJECT_ID` | Firebase プロジェクト ID | 同上 |
-| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage バケット | 同上 |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Sender ID | 同上 |
-| `VITE_FIREBASE_APP_ID` | Firebase App ID | 同上 |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics ID | 同上（任意） |
-| `GAS_WEBAPP_URL` | GAS Web App URL | Apps Script デプロイ画面 |
-| `GAS_SECRET` | GAS共有シークレット | 自分で作成 |
-
-## DB 設計概要
-
-| テーブル | 説明 |
-|----------|------|
-| `households` | 家計グループ（owner_user_id = Firebase UID） |
-| `profiles` | ユーザープロフィール（id = Firebase UID） |
-| `household_members` | 家計メンバー（user_id = Firebase UID） |
-| `categories` | 収支カテゴリ（household 単位） |
-| `transactions` | 収支明細 |
-| `budgets` | 月次予算 |
-| `household_settings` | 目標金額・目標年 |
-| `household_assets` | 資産内訳（株 / 投信 / 現金 / 口座） |
-
-- すべてのテーブルで RLS 有効
-- `auth.jwt()->>'sub'` で Firebase UID を参照
-- 新規ユーザーは `bootstrap_new_user()` RPC で household を自動生成
-
-## セキュリティ要点
-
-- クライアントは anon key のみ使用（service role key はサーバー専用）
-- household membership に基づくアクセス制御
-- Firebase ID トークンを Supabase リクエストヘッダーに付与
-
-## Vercel デプロイ
-
-### 1. Vercel プロジェクト作成
-
-1. [Vercel](https://vercel.com/) で GitHub リポジトリをインポート
-2. **Root Directory** を `frontend` に設定
-3. Framework Preset が **Vite** になっていることを確認
-4. Build / Output はデフォルトのままで OK
-
-```
-Root Directory : frontend
-Build Command  : npm run build   (自動検出)
-Output Dir     : dist            (自動検出)
-```
-
-### 2. 環境変数を Vercel に登録
-
-Vercel の **Settings → Environment Variables** に `.env` と同じキー・値を登録する。
-
-| 変数名 | 値 |
-|--------|-----|
-| `VITE_SUPABASE_URL` | Supabase の Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase の anon key |
-| `VITE_FIREBASE_API_KEY` | Firebase の API キー |
-| `VITE_FIREBASE_AUTH_DOMAIN` | `finance-site-fada6.firebaseapp.com` |
-| `VITE_FIREBASE_PROJECT_ID` | `finance-site-fada6` |
-| `VITE_FIREBASE_STORAGE_BUCKET` | `finance-site-fada6.firebasestorage.app` |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | `858089882597` |
-| `VITE_FIREBASE_APP_ID` | Firebase の App ID |
-| `VITE_FIREBASE_MEASUREMENT_ID` | `G-YME6HPE7CT` |
-| `GAS_WEBAPP_URL` | Apps Script の Web App URL |
-| `GAS_SECRET` | GAS 側の `APP_SECRET` と同値 |
-
-### 3. Firebase に Vercel ドメインを追加
-
-Firebase Console → Authentication → Settings → **Authorized domains** に以下を追加。
-
-```
-your-project.vercel.app       ← Vercel が発行するドメイン
-your-custom-domain.com        ← カスタムドメインを使う場合
-```
-
-> ※ デプロイ後に Vercel ダッシュボードで発行されたドメインを確認してから追加する。
-
-### 4. SPA ルーティング
-
-`frontend/vercel.json` に全パスを `index.html` へリライトする設定済みなので、
-`/transactions` 等を直接開いても 404 にならない。
-
-### 5. Google Sheets 連携（Google Apps Script）
-
-フロントは同一オリジンの `/api/gas/*` を呼び出し、
-銘柄追加時に `USER_ENTERED` 相当の数式をシートへ反映する。
-
-- 追加時: `symbol / name / quantity / uid / secret` を GAS へ送信
-- GAS 側で `=GOOGLEFINANCE(A{row},"price")` と `=C{row}*D{row}` を設定
-- 取得時: `uid + secret` で自分の行のみ返却
+- **自動連携 (Gmail ➔ GAS ➔ Firestore)**: カード会社の決済通知メールを定期スキャンし、AI・ルールベースによる店舗名からのカテゴリ自動分類と二重取込防止（冪等性）を行いながらFirestoreに自動保存します。
+- **リアルタイム反映 (onSnapshot)**: Firebase Firestoreのリスナー機能を使用し、自動インポートされたデータが画面上に一切のリロードなしで即座に反映されます。
+- **モバイルファースト設計**: 最大幅480pxに最適化されたプレミアムで滑らかなアニメーションを伴うモダンUI（ダークモードLP完備）。
+- **ユーザーデータ完全分離**: Firebase Authに紐づく `users/{userId}/transactions` サブコレクション構成により、マルチテナントでの完全なデータ分離を実現。
 
 ---
 
-## 今後の拡張
+## 📁 フォルダ構成
 
-- household 招待フロー（メール招待テーブル追加）
-- budgets UI 実装
-- materialized view による月次集計高速化
-- 課金テーブル追加（plans / subscriptions / invoices）
+```
+finance/
+├── firestore.rules          # Firestoreのセキュリティルール（ユーザー分離）
+└── frontend/
+    ├── src/
+    │   ├── components/      # BottomNav.vue / CategoryGrid.vue / TransactionCard.vue
+    │   ├── composables/     # useAuth / useTransactions (リアルタイム監視対応)
+    │   ├── lib/             # firebase.ts (Firebase SDK初期化)
+    │   ├── router/          # ルーティング（LP、ログイン、ホーム、履歴、入力、設定）
+    │   ├── types/           # index.ts (TransactionやCategory等の型定義)
+    │   ├── views/           # 各ページ（LandingView, HomeView, EntryView, HistoryView, SettingsView, LoginView）
+    │   └── style.css        # Tailwind CSS + 独自カスタムテーマ
+    ├── .env.example         # フロントエンド環境変数テンプレート
+    └── index.html           # アプリのエントリーHTML
+```
+
+---
+
+## 🛠️ セットアップとデプロイ手順
+
+### 1. Firebase（認証・DB・セキュリティルール）
+
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作成します。
+2. **Authentication** で「Google ログイン」および「メール/パスワード認証」を有効化します。
+3. **Firestore Database** を作成します。
+4. **セキュリティルール** (`firestore.rules`) にリポジトリ直下のルールファイルを適用します。
+   ```javascript
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{userId}/{document=**} {
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+5. プロジェクト設定からウェブアプリを追加し、Firebase SDK設定情報を取得します。
+
+---
+
+### 2. Frontend のローカル実行
+
+1. **環境変数の準備**
+   `frontend` フォルダに移動し、`.env` ファイルを作成してFirebaseの接続情報を記入します。
+   ```bash
+   cd frontend
+   cp .env.example .env
+   ```
+
+2. **依存関係のインストールと起動**
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+3. **ビルド (デプロイ確認用)**
+   ```bash
+   npm run build
+   ```
+
+#### フロント環境変数一覧 (`frontend/.env`)
+| 変数名 | 説明 |
+| :--- | :--- |
+| `VITE_FIREBASE_API_KEY` | Firebase API キー |
+| `VITE_FIREBASE_AUTH_DOMAIN` | Firebase 認証ドメイン |
+| `VITE_FIREBASE_PROJECT_ID` | Firebase プロジェクト ID |
+| `VITE_FIREBASE_STORAGE_BUCKET` | Firebase Storage バケット |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Messaging 送信者 ID |
+| `VITE_FIREBASE_APP_ID` | Firebase アプリ ID |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Firebase Analytics ID (任意) |
+
+---
+
+### 3. Google Apps Script (GAS) 自動連携の設定
+
+Gmailのカード決済通知を検知し、Firestore REST APIへ送信するバックグラウンドバッチの設定手順です。詳細は `brain/` 内の設計書 [gmail_gas_firestore_integration.md](file:///Users/maekawahiroyuki/.gemini/antigravity/brain/b8eb9666-1665-4c65-9eab-bbc54c7fab2d/gmail_gas_firestore_integration.md) を参照してください。
+
+1. **サービスアカウントの生成**: Firebase Console > プロジェクト設定 > サービス アカウント より秘密鍵（JSON）を生成しダウンロードします。
+2. **GASの作成**: [Google Apps Script](https://script.google.com/) で新規プロジェクトを作成し、`GmailImporter.gs` に設計書記載のコードを貼り付けます。
+3. **スクリプトプロパティの登録**:
+   - `FIREBASE_PROJECT_ID`: ダウンロードしたJSONの `project_id`
+   - `CLIENT_EMAIL`: JSONの `client_email`
+   - `PRIVATE_KEY`: JSONの `private_key` （`\n`も含めてすべて）
+   - `TARGET_UID`: 登録対象となるあなた自身のFirebaseログインユーザーUID
+4. **トリガー設定**: `processCardEmails` 関数を **「時間主導型」>「分ベースのタイマー」>「5分ごと」** でトリガー実行するように設定します。
+
+---
+
+## 🚀 Cloudflare Pages / Vercel デプロイ
+
+Vite製のSPAですので、静的ホスティング（Cloudflare Pages や Vercel）に一瞬でデプロイできます。
+
+### 1. デプロイ設定
+- **Root Directory**: `frontend`
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+
+### 2. 環境変数の追加
+Firebase Consoleから取得した `VITE_FIREBASE_` で始まる各接続キーをデプロイ環境の「Environment Variables（環境変数）」に登録します。
+
+### 3. SPAのルーティング対応
+Cloudflare Pages用に `frontend/public/_redirects` に以下の設定が組み込まれています。これにより、どのURLに直接アクセスしても正しくSPAルーティングが行われ、404エラーを回避できます。
+```text
+/*    /index.html   200
+```
+*(Vercelにデプロイする場合は、`vercel.json` などのリライト設定を必要に応じてご活用ください)*
