@@ -1,5 +1,5 @@
 <template>
-  <div class="tx-card" :class="transaction.kind">
+  <div class="tx-card" :class="transaction.kind" @click="$emit('edit', transaction.id)">
     <div class="tx-left">
       <div class="tx-icon">
         <span class="material-symbols-rounded">{{ icon }}</span>
@@ -31,6 +31,7 @@ const props = defineProps<{
 
 defineEmits<{
   delete: [id: string]
+  edit: [id: string]
 }>()
 
 const formatAmount = (amount: number) =>
@@ -46,6 +47,12 @@ const formatAmount = (amount: number) =>
   border-radius: 12px;
   background: var(--color-bg);
   gap: 12px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.tx-card:active {
+  transform: scale(0.98);
 }
 
 .tx-left {

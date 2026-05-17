@@ -39,7 +39,31 @@
             :icon="getCategoryIcon(tx.category)"
             :show-delete="true"
             @delete="handleDelete"
+            @edit="handleEdit"
           />
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
+      <div class="modal-content">
+        <h3 class="modal-title">カテゴリの変更</h3>
+        <p v-if="editingTransaction" class="modal-subtitle">
+          {{ editingTransaction.note || '対象データ' }}
+        </p>
+
+        <CategoryGrid
+          v-if="editingTransaction"
+          :categories="availableCategories"
+          v-model="selectedCategory"
+        />
+
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="closeEditModal">キャンセル</button>
+          <button class="btn btn-primary" @click="saveEdit" :disabled="!selectedCategory || isSaving">
+            {{ isSaving ? '保存中...' : '保存する' }}
+          </button>
         </div>
       </div>
     </div>
@@ -55,6 +79,7 @@ import { useTransactions } from '@/composables/useTransactions'
 import { useCategories } from '@/composables/useCategories'
 import BottomNav from '@/components/BottomNav.vue'
 import TransactionCard from '@/components/TransactionCard.vue'
+import CategoryGrid from '@/components/CategoryGrid.vue'
 import type { Transaction } from '@/types'
 
 const { user } = useAuth()
@@ -64,7 +89,7 @@ const now = new Date()
 const currentYear = ref(now.getFullYear())
 const currentMonth = ref(now.getMonth() + 1)
 
-const { loading, groupedByDate, fetchByMonth, deleteTransaction } = useTransactions(uid)
+const { loading, groupedByDate, fetchByMonth, deleteTransaction, updateTransaction, transactions } = useTransactions(uid)
 const { categories, fetchCategories } = useCategories(uid)
 
 onMounted(async () => {
@@ -109,6 +134,48 @@ const getCategoryIcon = (name: string) => {
 
 const handleDelete = async (id: string) => {
   await deleteTransaction(id)
+}
+
+// Edit Modal State
+const showEditModal = ref(false)
+const editingTransaction = ref<Transaction | null>(null)
+const selectedCategory = ref('')
+const isSaving = ref(false)
+
+const handleEdit = (id: string) => {
+  const tx = transactions.value.find(t => t.id === id)
+  if (tx) {
+    editingTransaction.value = tx
+    selectedCategory.value = tx.category
+    showEditModal.value = true
+  }
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editingTransaction.value = null
+  selectedCategory.value = ''
+}
+
+const availableCategories = computed(() => {
+  if (!editingTransaction.value) return []
+  return categories.value.filter(c => c.kind === editingTransaction.value!.kind)
+})
+
+const saveEdit = async () => {
+  if (!editingTransaction.value || !selectedCategory.value) return
+  isSaving.value = true
+  try {
+    await updateTransaction(editingTransaction.value.id, {
+      category: selectedCategory.value
+    })
+    closeEditModal()
+  } catch (e) {
+    console.error(e)
+    alert('保存に失敗しました')
+  } finally {
+    isSaving.value = false
+  }
 }
 </script>
 
@@ -189,7 +256,6 @@ const handleDelete = async (id: string) => {
   gap: 20px;
 }
 
-.date-group {}
 
 .date-header {
   display: flex;
@@ -214,5 +280,93 @@ const handleDelete = async (id: string) => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--color-bg);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 20px 20px 0 0;
+  padding: 24px;
+  animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.1);
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.modal-subtitle {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.btn:active {
+  opacity: 0.8;
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.btn-primary:disabled {
+  background: var(--color-text-muted);
+  cursor: not-allowed;
 }
 </style>

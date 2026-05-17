@@ -2,6 +2,7 @@ import { ref, computed, onUnmounted } from 'vue'
 import {
   collection,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   query,
@@ -89,6 +90,16 @@ export function useTransactions(userId: string) {
     }
   }
 
+  const updateTransaction = async (transactionId: string, updates: Partial<TransactionInput>) => {
+    error.value = null
+    try {
+      await updateDoc(doc(db, `users/${userId}/transactions/${transactionId}`), updates)
+    } catch (e: any) {
+      error.value = e.message ?? '更新に失敗しました'
+      throw e
+    }
+  }
+
   const summary = computed<MonthlySummary>(() => {
     const income = transactions.value
       .filter((t) => t.kind === 'income')
@@ -125,6 +136,7 @@ export function useTransactions(userId: string) {
     fetchByMonth,
     addTransaction,
     deleteTransaction,
+    updateTransaction,
     summary,
     recentTransactions,
     groupedByDate,
